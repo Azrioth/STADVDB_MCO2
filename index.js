@@ -81,7 +81,7 @@ app.get('/connection_status', (req, res) => {
 app.get('/get_game_details/:appID', async (req, res) => {
     const { appID } = req.params;
     try {
-        const [rows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [appID]);
+        const [rows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [appID]);
         if (rows.length === 0) {
             return res.status(404).send('Game not found');
         }
@@ -117,12 +117,12 @@ app.post('/update_game', async (req, res) => {
         }
     }
 
-    updateQuery += 'WHERE feedbackid = ?';
+    updateQuery += 'WHERE AppID = ?';
     values.push(AppID);
 
     try {
         await connection.promise().query(updateQuery, values);
-        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [AppID]);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [AppID]);
         res.json({ message: 'Game updated successfully', game: updatedRows[0] });
     } catch (err) {
         res.status(500).json({ message: 'Error updating game details', error: err.message });
@@ -137,13 +137,13 @@ app.post('/delete_review', async (req, res) => {
 
     switch (fieldToDelete) {
         case 'Reviews':
-            updateQuery = 'UPDATE dim_feedback SET Reviews = "No review" WHERE feedbackid = ?';
+            updateQuery = 'UPDATE dim_feedback SET Reviews = "No review" WHERE AppID = ?';
             break;
         case 'Metacritic_score':
-            updateQuery = 'UPDATE dim_feedback SET Metacritic_score = 0.0 WHERE feedbackid = ?';
+            updateQuery = 'UPDATE dim_feedback SET Metacritic_score = 0.0 WHERE AppID = ?';
             break;
         case 'Metacritic_url':
-            updateQuery = 'UPDATE dim_feedback SET Metacritic_url = "No metacritic URL", Metacritic_score = 0.0 WHERE feedbackid = ?';
+            updateQuery = 'UPDATE dim_feedback SET Metacritic_url = "No metacritic URL", Metacritic_score = 0.0 WHERE AppID = ?';
             break;
         default:
             return res.status(400).json({ message: 'Invalid field to delete' });
@@ -153,7 +153,7 @@ app.post('/delete_review', async (req, res) => {
     
     try {
         await connection.promise().query(updateQuery, values);
-        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [AppID]);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [AppID]);
         res.json({ message: 'Field deleted successfully', game: updatedRows[0] });
     } catch (err) {
         res.status(500).json({ message: 'Error deleting field', error: err.message });
