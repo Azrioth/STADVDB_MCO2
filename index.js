@@ -72,6 +72,42 @@ app.post('/update_game', async (req, res) => {
     }
 });
 
+// Delete specific review data
+app.post('/delete_field', async (req, res) => {
+    const { AppID, Field } = req.body;
+
+    try {
+        let query;
+        let params;
+
+        switch (Field) {
+            case 'Reviews':
+                query = 'UPDATE steam_reviews SET Reviews = ? WHERE AppID = ?';
+                params = ['No review', AppID];
+                break;
+            case 'Metacritic_score':
+                query = 'UPDATE steam_reviews SET Metacritic_score = ? WHERE AppID = ?';
+                params = [0.0, AppID];
+                break;
+            case 'Metacritic_url':
+                query = `
+                    UPDATE steam_reviews
+                    SET Metacritic_url = ?, Metacritic_score = ?
+                    WHERE AppID = ?
+                `;
+                params = ['No metacritic URL', 0.0, AppID];
+                break;
+            default:
+                return res.status(400).send('Invalid field selected');
+        }
+
+        await queryAsync(query, params);
+        res.send('Field updated successfully');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
 // Start the server
 const PORT = 3000;
 app.listen(PORT, () => {

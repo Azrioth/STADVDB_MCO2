@@ -44,6 +44,22 @@
         <button type="submit">Update Game</button>
     </form>
 
+    <!-- Delete Field Section -->
+    <h2>Delete Review</h2>
+    <form id="delete-form">
+        <input type="hidden" id="delete-AppID" name="AppID">
+
+        <label for="Field">Select Field to Delete:</label>
+        <select id="Field" name="Field">
+            <option value="Reviews">Reviews</option>
+            <option value="Metacritic_score">Metacritic Score</option>
+            <option value="Metacritic_url">Metacritic URL</option>
+        </select>
+        
+        <button type="submit" id="delete-button">Delete Field</button>
+    </form>
+
+
     <script>
         // Fetch game details
         document.getElementById('game-form').addEventListener('submit', async (e) => {
@@ -61,11 +77,12 @@
             }
             document.getElementById('game-details').innerText = JSON.stringify(data, null, 2);
             document.getElementById('update-AppID').value = appID;
+            document.getElementById('delete-AppID').value = appID;
             document.getElementById('Reviews').value = data.Reviews || '';
             document.getElementById('Metacritic_url').value = data.Metacritic_url || '';
             document.getElementById('Metacritic_score').value = data.Metacritic_score || '';
         });
-
+    
         // Update game details
         document.getElementById('update-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -78,6 +95,19 @@
             });
             alert(await res.text());
         });
-    </script>
+    
+        // Delete field
+        document.getElementById('delete-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(document.getElementById('delete-form'));
+            const jsonData = Object.fromEntries(formData.entries());
+            const res = await fetch('/delete_field', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jsonData)
+            });
+            alert(await res.text());
+        });
+    </script>    
 </body>
 </html>
