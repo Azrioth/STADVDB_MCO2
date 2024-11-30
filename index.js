@@ -5,17 +5,77 @@ const port = 3000;
 
 // Create MySQL connection
 const connection = mysql.createConnection({
-    host: '127.0.0.1',
-    user: 'root',
-    password: 'test',
-    database: 'steamgameswarehouse'
+    host: 'ccscloud.dlsu.edu.ph',
+    user: 'remote',
+    password: 'remotepassword',
+    database: 'mco2_ddbms'
 });
+
+const connection2 = mysql.createConnection({
+    host: 'ccscloud.dlsu.edu.ph',
+    user: 'remote',
+    password: 'remotepassword',
+    database: 'mco2_ddbms_under2010'
+});
+
+const connection3 = mysql.createConnection({
+    host: 'ccscloud.dlsu.edu.ph',
+    user: 'remote',
+    password: 'remotepassword',
+    database: 'mco2_ddbms_after2010'
+});
+
+let isConnected1 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
+let isConnected2 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
+let isConnected3 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
 
 // Serve static files (HTML, JS, CSS) from the "public" folder
 app.use(express.static('public'));
+
+async function monitorConnections() {
+    try {
+        // Check connection for DB1
+        await isConnected1.query('SELECT 1');
+        connected1 = true;
+    } catch (err) {
+        console.error('Node 1 Connection Error:', err.message);
+        connected1 = false;
+    }
+
+    try {
+        // Check connection for DB2
+        await isConnected2.query('SELECT 1');
+        connected2 = true;
+    } catch (err) {
+        console.error('Node 2 Connection Error:', err.message);
+        connected2 = false;
+    }
+
+    try {
+        // Check connection for DB3
+        await isConnected3.query('SELECT 1');
+        connected3 = true;
+    } catch (err) {
+        console.error('Node 3 Connection Error:', err.message);
+        connected3 = false;
+    }
+}
+
+//check connection status every 5 seconds, can be changed if desired/needed
+setInterval(monitorConnections, 5000);
+
+//Gets database connection status
+app.get('/connection_status', (req, res) => {
+    res.json({
+        isConnected1: connected1,
+        isConnected2: connected2,
+        isConnected3: connected3
+    });
+
+});
 
 // Route to fetch game details by AppID
 app.get('/get_game_details/:appID', async (req, res) => {
