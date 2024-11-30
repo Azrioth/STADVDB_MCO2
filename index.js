@@ -1,115 +1,106 @@
 const express = require('express');
-const mysql = require('mysql');
-const bodyParser = require('body-parser');
-
+const mysql = require('mysql2');
 const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+const port = 3000;
 
-// Connect to MySQL database
-const db = mysql.createConnection({
-    host: 'localhost',
+// Create MySQL connection
+const connection = mysql.createConnection({
+    host: '127.0.0.1',
     user: 'root',
-    password: 'your_password',
-    database: 'your_database'
+    password: 'test',
+    database: 'steamgameswarehouse'
 });
 
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to the database.');
-});
+// Middleware to parse incoming JSON requests
+app.use(express.json());
 
-// Utility function to run queries using promises
-const queryAsync = (sql, params) => {
-    return new Promise((resolve, reject) => {
-        db.query(sql, params, (err, results) => {
-            if (err) return reject(err);
-            resolve(results);
-        });
-    });
-};
+// Serve static files (HTML, JS, CSS) from the "public" folder
+app.use(express.static('public'));
 
-// Fetch game details by AppID
-app.post('/get_game', async (req, res) => {
-    const { AppID } = req.body;
+// Route to fetch game details by AppID
+app.get('/get_game_details/:appID', async (req, res) => {
+    const { appID } = req.params;
     try {
-        const query = 'SELECT * FROM steam_reviews WHERE AppID = ?';
-        const results = await queryAsync(query, [AppID]);
-
-        if (results.length === 0) {
-            return res.status(404).send({ error: 'Game not found' });
+        const [rows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [appID]);
+        if (rows.length === 0) {
+            return res.status(404).send('Game not found');
         }
-        res.send(results[0]);
+        res.json(rows[0]);
     } catch (err) {
-        res.status(500).send(err.message);
+        res.status(500).send('Error retrieving game details: ' + err.message);
     }
 });
 
-// Update game details
+// Route to update game details
 app.post('/update_game', async (req, res) => {
-    const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score } = req.body;
+    const { AppID, Reviews, Metacritic_url, Metacritic_score, ReviewType } = req.body;
+    let updateQuery = 'UPDATE dim_feedback SET ';
+    let values = [];
 
-    if (Metacritic_url === 'No metacritic URL' && Metacritic_score) {
-        return res.status(400).send('Cannot update Metacritic score if URL is "No metacritic URL"');
+    if (Reviews) {
+        updateQuery += 'Reviews = ?, ';
+        values.push(Reviews);
+    }
+    if (Metacritic_url) {
+        updateQuery += 'Metacritic_url = ?, ';
+        values.push(Metacritic_url);
+    }
+    if (Metacritic_score) {
+        updateQuery += 'Metacritic_score = ?, ';
+        values.push(Metacritic_score);
+    }
+    if (ReviewType) {
+        if (ReviewType === 'Positive') {
+            updateQuery += 'Positive_reviews = Positive_reviews + 1, Negative_reviews = Negative_reviews - 1 ';
+        } else if (ReviewType === 'Negative') {
+            updateQuery += 'Negative_reviews = Negative_reviews + 1, Positive_reviews = Positive_reviews - 1 ';
+        }
     }
 
+    updateQuery += 'WHERE feedbackid = ?';
+    values.push(AppID);
+
     try {
-        const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
-        const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
-
-        const query = `
-            UPDATE steam_reviews
-            SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
-                Positive_reviews = Positive_reviews + ?,
-                Negative_reviews = Negative_reviews + ?
-            WHERE AppID = ?
-        `;
-
-        await queryAsync(query, [Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID]);
-        res.send('Game updated successfully');
+        await connection.promise().query(updateQuery, values);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [AppID]);
+        res.json({ message: 'Game updated successfully', game: updatedRows[0] });
     } catch (err) {
-        res.status(500).send(err.message);
+        res.status(500).json({ message: 'Error updating game details', error: err.message });
     }
 });
 
-// Delete specific review data
-app.post('/delete_field', async (req, res) => {
-    const { AppID, Field } = req.body;
+// Route to delete specific game details
+app.post('/delete_review', async (req, res) => {
+    const { AppID, fieldToDelete } = req.body;
+    let updateQuery;
+    let values = [];
 
+    switch (fieldToDelete) {
+        case 'Reviews':
+            updateQuery = 'UPDATE dim_feedback SET Reviews = "No review" WHERE feedbackid = ?';
+            break;
+        case 'Metacritic_score':
+            updateQuery = 'UPDATE dim_feedback SET Metacritic_score = 0.0 WHERE feedbackid = ?';
+            break;
+        case 'Metacritic_url':
+            updateQuery = 'UPDATE dim_feedback SET Metacritic_url = "No metacritic URL", Metacritic_score = 0.0 WHERE feedbackid = ?';
+            break;
+        default:
+            return res.status(400).json({ message: 'Invalid field to delete' });
+    }
+    
+    values.push(AppID);
+    
     try {
-        let query;
-        let params;
-
-        switch (Field) {
-            case 'Reviews':
-                query = 'UPDATE steam_reviews SET Reviews = ? WHERE AppID = ?';
-                params = ['No review', AppID];
-                break;
-            case 'Metacritic_score':
-                query = 'UPDATE steam_reviews SET Metacritic_score = ? WHERE AppID = ?';
-                params = [0.0, AppID];
-                break;
-            case 'Metacritic_url':
-                query = `
-                    UPDATE steam_reviews
-                    SET Metacritic_url = ?, Metacritic_score = ?
-                    WHERE AppID = ?
-                `;
-                params = ['No metacritic URL', 0.0, AppID];
-                break;
-            default:
-                return res.status(400).send('Invalid field selected');
-        }
-
-        await queryAsync(query, params);
-        res.send('Field updated successfully');
+        await connection.promise().query(updateQuery, values);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE feedbackid = ?', [AppID]);
+        res.json({ message: 'Field deleted successfully', game: updatedRows[0] });
     } catch (err) {
-        res.status(500).send(err.message);
+        res.status(500).json({ message: 'Error deleting field', error: err.message });
     }
 });
 
 // Start the server
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
 });

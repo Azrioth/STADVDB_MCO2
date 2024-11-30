@@ -4,110 +4,171 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Steam Games Reviews</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Steam Games Reviews</h1>
 
-    <!-- Game Lookup Section -->
-    <form id="game-form">
-        <label for="AppID">Enter Game ID:</label>
-        <input type="text" id="AppID" name="AppID" required>
-        <button type="submit">Fetch Game</button>
-    </form>
-    <div id="game-details"></div>
+    <div>
+        <label for="game-id">Enter Game ID:</label>
+        <input type="text" id="game-id" placeholder="Enter AppID">
+        <button id="fetch-details">Fetch Details</button>
+    </div>
 
-    <!-- Game Update Section -->
+    <h2>Game Details</h2>
+    <table id="game-details" border="1">
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>Content</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Game details will be inserted here -->
+        </tbody>
+    </table>
+
     <h2>Update Review</h2>
     <form id="update-form">
         <input type="hidden" id="update-AppID" name="AppID">
-
         <label for="Reviews">Review:</label>
-        <input type="text" id="Reviews" name="Reviews">
+        <input type="text" id="Reviews" name="Reviews" placeholder="Leave blank to skip update">
 
         <div>
             <label>
-                <input type="radio" name="ReviewType" value="Positive">
-                Positive
+                <input type="radio" name="ReviewType" value="Positive"> Positive
             </label>
             <label>
-                <input type="radio" name="ReviewType" value="Negative">
-                Negative
+                <input type="radio" name="ReviewType" value="Negative"> Negative
             </label>
         </div>
 
         <label for="Metacritic_url">Metacritic URL:</label>
-        <input type="text" id="Metacritic_url" name="Metacritic_url">
+        <input type="text" id="Metacritic_url" name="Metacritic_url" placeholder="Leave blank to skip update">
 
         <label for="Metacritic_score">Metacritic Score:</label>
-        <input type="number" id="Metacritic_score" name="Metacritic_score">
+        <input type="number" id="Metacritic_score" name="Metacritic_score" placeholder="Leave blank to skip update">
 
         <button type="submit">Update Game</button>
     </form>
 
-    <!-- Delete Field Section -->
     <h2>Delete Review</h2>
     <form id="delete-form">
-        <input type="hidden" id="delete-AppID" name="AppID">
-
-        <label for="Field">Select Field to Delete:</label>
-        <select id="Field" name="Field">
+        <label for="delete-field">Select field to delete:</label>
+        <select id="delete-field" name="delete-field">
             <option value="Reviews">Reviews</option>
             <option value="Metacritic_score">Metacritic Score</option>
             <option value="Metacritic_url">Metacritic URL</option>
         </select>
-        
-        <button type="submit" id="delete-button">Delete Field</button>
+        <button type="submit">Delete Field</button>
     </form>
 
-
     <script>
-        // Fetch game details
-        document.getElementById('game-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const appID = document.getElementById('AppID').value;
-            const res = await fetch('/get_game', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ AppID: appID })
-            });
-            const data = await res.json();
-            if (data.error) {
-                alert(data.error);
+        // Function to update the game details in the table
+        function updateTable(gameDetails) {
+            const tableBody = document.querySelector('#game-details tbody');
+            tableBody.innerHTML = '';  // Clear any existing rows
+
+            // Add new rows with game details
+            for (let key in gameDetails) {
+                if (gameDetails.hasOwnProperty(key)) {
+                    const row = document.createElement('tr');
+                    const featureCell = document.createElement('td');
+                    const contentCell = document.createElement('td');
+
+                    featureCell.textContent = key;
+                    contentCell.textContent = gameDetails[key];
+
+                    row.appendChild(featureCell);
+                    row.appendChild(contentCell);
+                    tableBody.appendChild(row);
+                }
+            }
+        }
+
+        // Fetch game details based on AppID
+        document.getElementById('fetch-details').addEventListener('click', async () => {
+            const appID = document.getElementById('game-id').value;
+            if (!appID) {
+                alert('Please enter a valid game ID!');
                 return;
             }
-            document.getElementById('game-details').innerText = JSON.stringify(data, null, 2);
-            document.getElementById('update-AppID').value = appID;
-            document.getElementById('delete-AppID').value = appID;
-            document.getElementById('Reviews').value = data.Reviews || '';
-            document.getElementById('Metacritic_url').value = data.Metacritic_url || '';
-            document.getElementById('Metacritic_score').value = data.Metacritic_score || '';
+
+            try {
+                const response = await fetch(`/get_game_details/${appID}`);
+                const gameDetails = await response.json();
+
+                if (response.ok) {
+                    console.log('Game details retrieved successfully:', gameDetails);
+                    updateTable(gameDetails);
+                    document.getElementById('update-AppID').value = appID;
+                } else {
+                    alert('Game not found');
+                }
+            } catch (error) {
+                console.error('Error fetching game details:', error);
+                alert('Error fetching game details. Please try again later.');
+            }
         });
-    
+
         // Update game details
-        document.getElementById('update-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(document.getElementById('update-form'));
-            const jsonData = Object.fromEntries(formData.entries());
-            const res = await fetch('/update_game', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(jsonData)
-            });
-            alert(await res.text());
+        document.getElementById('update-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const appID = document.getElementById('update-AppID').value;
+            const reviews = document.getElementById('Reviews').value;
+            const metacriticUrl = document.getElementById('Metacritic_url').value;
+            const metacriticScore = document.getElementById('Metacritic_score').value;
+            const reviewType = document.querySelector('input[name="ReviewType"]:checked')?.value;
+
+            const data = { AppID: appID, Reviews: reviews, Metacritic_url: metacriticUrl, Metacritic_score: metacriticScore, ReviewType: reviewType };
+
+            try {
+                const response = await fetch('/update_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    console.log('Game updated successfully:', result.game);
+                    updateTable(result.game);
+                } else {
+                    alert('Failed to update game');
+                }
+            } catch (error) {
+                console.error('Error updating game:', error);
+                alert('Error updating game. Please try again later.');
+            }
         });
-    
-        // Delete field
-        document.getElementById('delete-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(document.getElementById('delete-form'));
-            const jsonData = Object.fromEntries(formData.entries());
-            const res = await fetch('/delete_field', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(jsonData)
-            });
-            alert(await res.text());
+
+        // Delete review field
+        document.getElementById('delete-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const appID = document.getElementById('update-AppID').value;
+            const fieldToDelete = document.getElementById('delete-field').value;
+
+            const data = { AppID: appID, fieldToDelete: fieldToDelete };
+
+            try {
+                const response = await fetch('/delete_review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    console.log('Field deleted successfully:', result.game);
+                    updateTable(result.game);
+                } else {
+                    alert('Failed to delete field');
+                }
+            } catch (error) {
+                console.error('Error deleting field:', error);
+                alert('Error deleting field. Please try again later.');
+            }
         });
-    </script>    
+    </script>
 </body>
 </html>
