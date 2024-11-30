@@ -1,33 +1,35 @@
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const app = express();
 const port = 3000;
 
 // Create MySQL connection
-const connection = mysql.createConnection({
+const connection = mysql.createPool({
     host: 'ccscloud.dlsu.edu.ph',
     user: 'remote',
     password: 'remotepassword',
-    database: 'mco2_ddbms'
+    database: 'mco2_ddbms',
+    waitForConnections: true,
+    connectionLimit: 4
 });
 
-const connection2 = mysql.createConnection({
+const connection2 = mysql.createPool({
     host: 'ccscloud.dlsu.edu.ph',
     user: 'remote',
     password: 'remotepassword',
-    database: 'mco2_ddbms_under2010'
+    database: 'mco2_ddbms_under2010',
+    waitForConnections: true,
+    connectionLimit: 4
 });
 
-const connection3 = mysql.createConnection({
+const connection3 = mysql.createPool({
     host: 'ccscloud.dlsu.edu.ph',
     user: 'remote',
     password: 'remotepassword',
-    database: 'mco2_ddbms_after2010'
+    database: 'mco2_ddbms_after2010',
+    waitForConnections: true,
+    connectionLimit: 4
 });
-
-let isConnected1 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
-let isConnected2 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
-let isConnected3 = mysql.createPool({...connection, waitForConnections: true, connectionLimit: 4});
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
@@ -35,32 +37,36 @@ app.use(express.json());
 // Serve static files (HTML, JS, CSS) from the "public" folder
 app.use(express.static('public'));
 
+let isConnected1 = false;
+let isConnected2 = false;
+let isConnected3 = false;
+
 async function monitorConnections() {
     try {
         // Check connection for DB1
-        await isConnected1.query('SELECT 1');
-        connected1 = true;
+        await connection.query('SELECT 1');
+        isConnected1 = true;
     } catch (err) {
         console.error('Node 1 Connection Error:', err.message);
-        connected1 = false;
+        isConnected1 = false;
     }
 
     try {
         // Check connection for DB2
-        await isConnected2.query('SELECT 1');
-        connected2 = true;
+        await connection2.query('SELECT 1');
+        isConnected2 = true;
     } catch (err) {
         console.error('Node 2 Connection Error:', err.message);
-        connected2 = false;
+        isConnected2 = false;
     }
 
     try {
         // Check connection for DB3
-        await isConnected3.query('SELECT 1');
-        connected3 = true;
+        await connection3.query('SELECT 1');
+        isConnected3 = true;
     } catch (err) {
         console.error('Node 3 Connection Error:', err.message);
-        connected3 = false;
+        isConnected3 = false;
     }
 }
 
@@ -81,7 +87,7 @@ app.get('/connection_status', (req, res) => {
 app.get('/get_game_details/:appID', async (req, res) => {
     const { appID } = req.params;
     try {
-        const [rows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [appID]);
+        const [rows] = await connection.promise().query('SELECT * FROM gameinfo WHERE AppID = ?', [appID]);
         if (rows.length === 0) {
             return res.status(404).send('Game not found');
         }
@@ -94,7 +100,7 @@ app.get('/get_game_details/:appID', async (req, res) => {
 // Route to update game details
 app.post('/update_game', async (req, res) => {
     const { AppID, Reviews, Metacritic_url, Metacritic_score, ReviewType } = req.body;
-    let updateQuery = 'UPDATE dim_feedback SET ';
+    let updateQuery = 'UPDATE gameinfo SET ';
     let values = [];
 
     if (Reviews) {
@@ -117,12 +123,13 @@ app.post('/update_game', async (req, res) => {
         }
     }
 
+    updateQuery = updateQuery.slice(0,-2);
     updateQuery += 'WHERE AppID = ?';
     values.push(AppID);
 
     try {
         await connection.promise().query(updateQuery, values);
-        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [AppID]);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         res.json({ message: 'Game updated successfully', game: updatedRows[0] });
     } catch (err) {
         res.status(500).json({ message: 'Error updating game details', error: err.message });
@@ -132,28 +139,19 @@ app.post('/update_game', async (req, res) => {
 // Route to delete specific game details
 app.post('/delete_review', async (req, res) => {
     const { AppID, fieldToDelete } = req.body;
-    let updateQuery;
-    let values = [];
 
-    switch (fieldToDelete) {
-        case 'Reviews':
-            updateQuery = 'UPDATE dim_feedback SET Reviews = "No review" WHERE AppID = ?';
-            break;
-        case 'Metacritic_score':
-            updateQuery = 'UPDATE dim_feedback SET Metacritic_score = 0.0 WHERE AppID = ?';
-            break;
-        case 'Metacritic_url':
-            updateQuery = 'UPDATE dim_feedback SET Metacritic_url = "No metacritic URL", Metacritic_score = 0.0 WHERE AppID = ?';
-            break;
-        default:
-            return res.status(400).json({ message: 'Invalid field to delete' });
-    }
+    const updateMap = {
+        Reviews: 'UPDATE gameinfo SET Reviews = "No review" WHERE AppID = ?',
+        Metacritic_score: 'UPDATE gameinfo SET Metacritic_score = 0.0 WHERE AppID = ?',
+        Metacritic_url: 'UPDATE gameinfo SET Metacritic_url = "No metacritic URL", Metacritic_score = 0.0 WHERE AppID = ?',
+    };
     
-    values.push(AppID);
-    
+    const updateQuery = updateMap[fieldToDelete];
+    if (!updateQuery) return res.status(400).json({message: 'Invalid field to delete'});
+
     try {
-        await connection.promise().query(updateQuery, values);
-        const [updatedRows] = await connection.promise().query('SELECT * FROM dim_feedback WHERE AppID = ?', [AppID]);
+        await connection.promise().query(updateQuery, [AppID]);
+        const [updatedRows] = await connection.promise().query('SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         res.json({ message: 'Field deleted successfully', game: updatedRows[0] });
     } catch (err) {
         res.status(500).json({ message: 'Error deleting field', error: err.message });
