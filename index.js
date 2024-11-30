@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 
 const app = express();
@@ -9,9 +9,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Connect to MySQL database
 const db = mysql.createConnection({
     host: 'ccscloud.dlsu.edu.ph',
-    user: 'replicator', //not yet set in stone
-    password: 'sqlpassword', //not yet set in stone
-    database: 'mco2_ddbms'
+    port: 20662,
+    user: 'remote', //not yet set in stone
+    password: 'remotepassword', //not yet set in stone
+    database: 'mco2_ddbms',
+    ssl:{rejectUnauthorized: false}
 });
 
 db.connect((err) => {
