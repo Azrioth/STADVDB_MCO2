@@ -8,10 +8,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Connect to MySQL database
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'your_password',
-    database: 'your_database'
+    host: 'ccscloud.dlsu.edu.ph',
+    user: 'replicator', //not yet set in stone
+    password: 'sqlpassword', //not yet set in stone
+    database: 'mco2_ddbms'
 });
 
 db.connect((err) => {
