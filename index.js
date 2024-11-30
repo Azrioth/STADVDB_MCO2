@@ -40,7 +40,7 @@ app.get('/', async (req, res) =>{
 app.post('/get_game', async (req, res) => {
     const { AppID } = req.body;
     try {
-        const query = 'SELECT * FROM steam_reviews WHERE AppID = ?';
+        const query = 'SELECT * FROM gameinfo WHERE AppID = ?';
         const results = await queryAsync(query, [AppID]);
 
         if (results.length === 0) {
