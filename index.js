@@ -10,7 +10,10 @@ const connection = mysql.createPool({
     password: 'remotepassword',
     database: 'mco2_ddbms',
     waitForConnections: true,
-    connectionLimit: 4
+    connectionLimit: 4,
+    ssl: {
+        rejectUnauthorized: true
+    }
 });
 
 const connection2 = mysql.createPool({
@@ -19,7 +22,10 @@ const connection2 = mysql.createPool({
     password: 'remotepassword',
     database: 'mco2_ddbms_under2010',
     waitForConnections: true,
-    connectionLimit: 4
+    connectionLimit: 4,
+    ssl: {
+        rejectUnauthorized: true
+    }
 });
 
 const connection3 = mysql.createPool({
@@ -28,7 +34,10 @@ const connection3 = mysql.createPool({
     password: 'remotepassword',
     database: 'mco2_ddbms_after2010',
     waitForConnections: true,
-    connectionLimit: 4
+    connectionLimit: 4,
+    ssl: {
+        rejectUnauthorized: true
+    }
 });
 
 // Middleware to parse incoming JSON requests
