@@ -35,12 +35,14 @@
         <input type="text" id="Reviews" name="Reviews" placeholder="Leave blank to skip update">
 
         <div>
-            <label>
-                <input type="radio" name="ReviewType" value="Positive"> Positive
-            </label>
-            <label>
-                <input type="radio" name="ReviewType" value="Negative"> Negative
-            </label>
+            <form id="ReviewType">
+                <label for="review-type-field">Review Type:</label>
+                <select id="review-type-field" name="review-type-field">
+                    <option></option>
+                    <option value="Positive">Positive</option>
+                    <option value="Negative">Negative</option>
+                </select>
+            </form>
         </div>
 
         <label for="Metacritic_url">Metacritic URL:</label>
@@ -119,7 +121,7 @@
             const reviews = document.getElementById('Reviews').value;
             const metacriticUrl = document.getElementById('Metacritic_url').value;
             const metacriticScore = document.getElementById('Metacritic_score').value;
-            const reviewType = document.querySelector('input[name="ReviewType"]:checked')?.value;
+            const reviewType = document.getElementById('review-type-field').value.value;
 
             const data = { AppID: appID, Reviews: reviews, Metacritic_url: metacriticUrl, Metacritic_score: metacriticScore, ReviewType: reviewType };
 
