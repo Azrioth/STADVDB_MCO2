@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Games Reviews</title>
+</head>
+<body>
+    <h1>Steam Games Reviews</h1>
+
+    <!-- Game Lookup Section -->
+    <form id="game-form">
+        <label for="AppID">Enter Game ID:</label>
+        <input type="text" id="AppID" name="AppID" required>
+        <button type="submit">Fetch Game</button>
+    </form>
+    <div id="game-details"></div>
+
+    <!-- Game Update Section -->
+    <h2>Update Review</h2>
+    <form id="update-form">
+        <input type="hidden" id="update-AppID" name="AppID">
+
+        <label for="Reviews">Review:</label>
+        <input type="text" id="Reviews" name="Reviews">
+
+        <div>
+            <label>
+                <input type="radio" name="ReviewType" value="Positive">
+                Positive
+            </label>
+            <label>
+                <input type="radio" name="ReviewType" value="Negative">
+                Negative
+            </label>
+        </div>
+
+        <label for="Metacritic_url">Metacritic URL:</label>
+        <input type="text" id="Metacritic_url" name="Metacritic_url">
+
+        <label for="Metacritic_score">Metacritic Score:</label>
+        <input type="number" id="Metacritic_score" name="Metacritic_score">
+
+        <button type="submit">Update Game</button>
+    </form>
+
+    <script>
+        // Fetch game details
+        document.getElementById('game-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const appID = document.getElementById('AppID').value;
+            const res = await fetch('/get_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ AppID: appID })
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            document.getElementById('game-details').innerText = JSON.stringify(data, null, 2);
+            document.getElementById('update-AppID').value = appID;
+            document.getElementById('Reviews').value = data.Reviews || '';
+            document.getElementById('Metacritic_url').value = data.Metacritic_url || '';
+            document.getElementById('Metacritic_score').value = data.Metacritic_score || '';
+        });
+
+        // Update game details
+        document.getElementById('update-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(document.getElementById('update-form'));
+            const jsonData = Object.fromEntries(formData.entries());
+            const res = await fetch('/update_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jsonData)
+            });
+            alert(await res.text());
+        });
+    </script>
+</body>
+</html>
