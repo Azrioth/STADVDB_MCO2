@@ -17,10 +17,39 @@ const db = mysql.createConnection({
     ssl:{rejectUnauthorized: false}
 });
 
+const node2 = mysql.createConnection({
+    host: 'ccscloud.dlsu.edu.ph',
+    port: 20672,
+    user: 'remote',
+    password: 'remotepassword',
+    database: 'mco2_ddbms_under2010',
+    ssl:{rejectUnauthorized: false}
+});
+
+const node3 = mysql.createConnection({
+    host: 'ccscloud.dlsu.edu.ph',
+    port: 20682,
+    user: 'remote',
+    password: 'remotepassword',
+    database: 'mco2_ddbms_after2010',
+    ssl:{rejectUnauthorized: false}
+});
+
 db.connect((err) => {
     if (err) throw err;
     console.log('Connected to the database.');
 });
+
+node2.connect((err) => {
+    if (err) throw err;
+    console.log("Connected to node 2");
+})
+
+node3.connect((err) => {
+    if (err) throw err;
+    console.log("Connected to node 3");
+})
+
 
 // Utility function to run queries using promises
 const queryAsync = (sql, params) => {
