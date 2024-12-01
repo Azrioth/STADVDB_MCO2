@@ -35,6 +35,7 @@ const node3 = mysql.createConnection({
     ssl: { rejectUnauthorized: false }
 });
 
+
 db.connect((err) => {
     if (err) throw err;
     console.log('Connected to the central database.');
@@ -49,6 +50,31 @@ node3.connect((err) => {
     if (err) throw err;
     console.log('Connected to Node 3.');
 });
+
+// health check
+const nodeHealth = {
+    node1: true,
+    node2: true,
+    node3: true
+}
+
+const checkNodeHealth = async(connection, node) => {
+    try{
+        await queryAsync(connection, "SELECT 1");
+        nodeHealth[node] = true;
+        console.log(node, "healthy");
+    } catch(err){
+        nodeHealth[node] = false;
+        console.log(node, "not healthy");
+    }
+}
+
+setInterval(() =>{
+    checkNodeHealth(db, 'node1');
+    checkNodeHealth(node2, 'node2');
+    checkNodeHealth(node3, 'node3');
+}, 5000);
+
 
 // Utility function to run queries using promises
 const queryAsync = (connection, sql, params) => {
@@ -74,21 +100,21 @@ app.post('/get_game', async (req, res) => {
         // Check Node 2 first
         results = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         if (results.length > 0) {
-            console.log('Data retrieved from Node 2.');
+            console.log('Data is in Node 2'); // Log data from Node 2
             return res.send({ source: 'Node 2', data: results[0] });
         }
 
         // Check Node 3 next
         results = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         if (results.length > 0) {
-            console.log('Data retrieved from Node 3.');
+            console.log('Data is in Node 3'); // Log data from Node 3
             return res.send({ source: 'Node 3', data: results[0] });
         }
 
         // Check Central Node as a fallback
         results = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         if (results.length > 0) {
-            console.log('Data retrieved from Central Node (Node 1).');
+            console.log('Data is in Central Node'); // Log data from Central Node
             return res.send({ source: 'Central Node', data: results[0] });
         }
 
@@ -118,6 +144,22 @@ app.post('/update_game', async (req, res) => {
             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
         ]);
         res.send('Game updated successfully.');
+    } catch (err) {
+        res.status(500).send({ error: err.message });
+    }
+});
+// Insert a new game
+app.post('/add_game', async (req, res) => {
+    const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
+
+    try {
+        // Only write to the master node
+        const query = `
+            INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        await queryAsync(db, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
+        res.send('Game added successfully.');
     } catch (err) {
         res.status(500).send({ error: err.message });
     }
