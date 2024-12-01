@@ -57,6 +57,8 @@
         <p><span>Required Age:</span> <span id="required-age"></span></p>
         <p><span>Achievements:</span> <span id="achievements"></span></p>
         <p><span>Reviews:</span> <span id="reviews"></span></p>
+        <p><span>Positive Reviews:</span> <span id="positive-reviews"></span></p>
+        <p><span>Negative Reviews:</span> <span id="negative-reviews"></span></p>
         <p><span>Metacritic Score:</span> <span id="metacritic-score"></span></p>
         <p><span>Metacritic URL:</span> <a id="metacritic-url" href="#" target="_blank">Link</a></p>
     </div>
@@ -125,18 +127,21 @@
             // Populate game details
             document.getElementById('game-id').textContent = data.data.AppID || 'N/A';
             document.getElementById('game-name').textContent = data.data.Game_Name || 'N/A';
-            document.getElementById('release-date').textContent = data.data.Release_date || 'N/A';
+            document.getElementById('release-date').textContent = data.data.Release_date
+                ? new Date(data.data.Release_date).toISOString().split('T')[0]
+                : 'N/A';
             document.getElementById('price').textContent = `$${data.data.Price || 0}`;
             document.getElementById('required-age').textContent = data.data.Required_age || 'N/A';
             document.getElementById('achievements').textContent = data.data.Achievements || 'N/A';
             document.getElementById('reviews').textContent = data.data.Reviews || 'No reviews';
+            document.getElementById('positive-reviews').textContent = data.data.Positive_reviews || 0;
+            document.getElementById('negative-reviews').textContent = data.data.Negative_reviews || 0;
             document.getElementById('metacritic-score').textContent = data.data.Metacritic_score || 'N/A';
             document.getElementById('metacritic-url').href = data.data.Metacritic_url || '#';
             document.getElementById('metacritic-url').textContent = data.data.Metacritic_url ? 'View Metacritic' : 'No URL';
 
             // Show the game details section
             document.getElementById('game-details').style.display = 'block';
-            document.getElementById('release-date').textContent = data.data.Release_date ? new Date(data.data.Release_date).toISOString().split('T')[0] : 'N/A';
         });
 
         // Update game details
@@ -151,6 +156,7 @@
             });
             alert(await res.text());
         });
+
         // Delete field
         document.getElementById('delete-form').addEventListener('submit', async (e) => {
             e.preventDefault();
