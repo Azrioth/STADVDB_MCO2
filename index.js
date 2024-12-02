@@ -36,44 +36,52 @@ const node3 = mysql.createConnection({
 });
 
 
-db.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to the central database.');
-});
+// db.connect((err) => {
+//     if (err) throw err;
+//     console.log('Connected to the central database.');
+// });
+
+// node2.connect((err) => {
+//     if (err) throw err;
+//     console.log('Connected to Node 2.');
+// });
+
+// node3.connect((err) => {
+//     if (err) throw err;
+//     console.log('Connected to Node 3.');
+// });
+
+
 
 node2.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to Node 2.');
+    if (err) {
+        console.error('Failed to connect to Node 2:', err.message);
+        nodeHealth.node2 = false; // Mark Node 2 as down
+    } else {
+        console.log('Connected to Node 2.');
+        nodeHealth.node2 = true; // Mark Node 2 as healthy
+    }
 });
 
 node3.connect((err) => {
-    if (err) throw err;
-    console.log('Connected to Node 3.');
+    if (err) {
+        console.error('Failed to connect to Node 3:', err.message);
+        nodeHealth.node3 = false; // Mark Node 3 as down
+    } else {
+        console.log('Connected to Node 3.');
+        nodeHealth.node3 = true; // Mark Node 3 as healthy
+    }
 });
 
-// health check
-const nodeHealth = {
-    node1: true,
-    node2: true,
-    node3: true
-}
-
-const checkNodeHealth = async(connection, node) => {
-    try{
-        await queryAsync(connection, "SELECT 1");
-        nodeHealth[node] = true;
-        console.log(node, "healthy");
-    } catch(err){
-        nodeHealth[node] = false;
-        console.log(node, "not healthy");
+db.connect((err) => {
+    if (err) {
+        console.error('Failed to connect to Central Node:', err.message);
+        nodeHealth.node1 = false; // Mark Central Node as down
+    } else {
+        console.log('Connected to the central database.');
+        nodeHealth.node1 = true; // Mark Central Node as healthy
     }
-}
-
-setInterval(() =>{
-    checkNodeHealth(db, 'node1');
-    checkNodeHealth(node2, 'node2');
-    checkNodeHealth(node3, 'node3');
-}, 5000);
+});
 
 
 // Utility function to run queries using promises
@@ -86,6 +94,36 @@ const queryAsync = (connection, sql, params) => {
     });
 };
 
+
+const nodeHealth = {
+    node1: true, // Represents the central database
+    node2: true, // Represents the node for pre-2010 games
+    node3: true  // Represents the node for post-2010 games
+};
+
+const checkNodeHealth = async (connection, node) => {
+    console.log("----------------------");
+    try {
+        await queryAsync(connection, 'SELECT 1'); // Simple query to check connectivity
+        nodeHealth[node] = true;
+        console.log(`${node} is healthy.`);
+    } catch (err) {
+        nodeHealth[node] = false;
+        console.log(`${node} is not healthy: ${err.message}`);
+    }
+    
+};
+
+// Periodic health checks every minute
+setInterval(() => {
+    checkNodeHealth(db, 'node1');
+    checkNodeHealth(node2, 'node2');
+    checkNodeHealth(node3, 'node3');
+}, 10000);
+
+
+
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '/public/index.html'));
 });
@@ -97,48 +135,73 @@ app.post('/get_game', async (req, res) => {
     try {
         let results;
 
-        // Check Node 2 first
-        results = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
-        if (results.length > 0) {
-            console.log('Data is in Node 2'); // Log data from Node 2
-            return res.send({ source: 'Node 2', data: results[0] });
+        // Check Node 2 first if healthy
+        if (nodeHealth.node2) {
+            try {
+                results = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                if (results.length > 0) {
+                    console.log('Data retrieved from Node 2.');
+                    return res.send({ source: 'Node 2', data: results[0] });
+                }
+            } catch (err) {
+                console.error('Node 2 is down:', err.message);
+                nodeHealth.node2 = false; // Mark Node 2 as down
+            }
         }
 
-        // Check Node 3 next
-        results = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
-        if (results.length > 0) {
-            console.log('Data is in Node 3'); // Log data from Node 3
-            return res.send({ source: 'Node 3', data: results[0] });
+        // Check Node 3 if healthy
+        if (nodeHealth.node3) {
+            try {
+                results = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                if (results.length > 0) {
+                    console.log('Data retrieved from Node 3.');
+                    return res.send({ source: 'Node 3', data: results[0] });
+                }
+            } catch (err) {
+                console.error('Node 3 is down:', err.message);
+                nodeHealth.node3 = false; // Mark Node 3 as down
+            }
         }
 
-        // Check Central Node as a fallback
-        results = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
-        if (results.length > 0) {
-            console.log('Data is in Central Node'); // Log data from Central Node
-            return res.send({ source: 'Central Node', data: results[0] });
+        // Fallback to Central Node
+        if (nodeHealth.node1) {
+            try {
+                results = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                if (results.length > 0) {
+                    console.log('Data retrieved from Central Node.');
+                    return res.send({ source: 'Central Node', data: results[0] });
+                }
+            } catch (err) {
+                console.error('Central Node is down:', err.message);
+                nodeHealth.node1 = false; // Mark Central Node as down
+            }
         }
-
+        console.log("--------------------------");
+        // If no data found
         res.status(404).send({ error: 'Game not found.' });
     } catch (err) {
-        res.status(500).send({ error: err.message });
+        res.status(500).send({ error: 'Internal server error: ' + err.message });
     }
 });
+
+
 
 // Update game details
 app.post('/update_game', async (req, res) => {
     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score } = req.body;
+    console.log(AppID);
 
     try {
         const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
         const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
 
         const query = `
-            UPDATE steam_reviews
+            UPDATE gameinfo
             SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
-                Positive_reviews = Positive_reviews + ?,
-                Negative_reviews = Negative_reviews + ?
+            Positive_reviews = Positive_reviews + ?,
+            Negative_reviews = Negative_reviews + ?
             WHERE AppID = ?
-        `;
+    `;
 
         await queryAsync(db, query, [
             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
@@ -153,18 +216,64 @@ app.post('/add_game', async (req, res) => {
     const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
 
     try {
-        // Only write to the master node
+        // Insert into the master node
         const query = `
             INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
         await queryAsync(db, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
-        res.send('Game added successfully.');
+
+        // Determine which node to replicate the data to
+        const releaseDate = new Date(Release_date);
+        if (releaseDate < new Date('2010-01-01')) {
+            // Insert into Node 2
+            await queryAsync(node2, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
+        } else {
+            // Insert into Node 3
+            await queryAsync(node3, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
+        }
+
+        res.send('Game added successfully and replicated to appropriate node.');
+    } catch (err) {
+        res.status(500).send({ error: err.message });
+    }});
+app.get('/fetch_game/:AppID', async (req, res) => {
+    const { AppID } = req.params;
+
+    try {
+        // Check which node to query
+        let nodeToQuery = null;
+
+        if (nodeHealth.node2) {
+            // Pre-2010 logic
+            const pre2010Result = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ? AND Release_date < "2010-01-01"', [AppID]);
+            if (pre2010Result.length > 0) {
+                nodeToQuery = 'Node 2';
+                return res.send({ source: nodeToQuery, data: pre2010Result[0] });
+            }
+        }
+
+        if (nodeHealth.node3) {
+            // Post-2010 logic
+            const post2010Result = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ? AND Release_date >= "2010-01-01"', [AppID]);
+            if (post2010Result.length > 0) {
+                nodeToQuery = 'Node 3';
+                return res.send({ source: nodeToQuery, data: post2010Result[0] });
+            }
+        }
+
+        // Fallback to master node if slaves are down
+        const masterResult = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+        if (masterResult.length > 0) {
+            nodeToQuery = 'Master Node';
+            return res.send({ source: nodeToQuery, data: masterResult[0] });
+        }
+
+        res.status(404).send('Game not found.');
     } catch (err) {
         res.status(500).send({ error: err.message });
     }
 });
-
 // Delete specific review data
 app.post('/delete_field', async (req, res) => {
     const { AppID, Field } = req.body;
