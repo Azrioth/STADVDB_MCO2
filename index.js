@@ -22,7 +22,7 @@ const node2 = mysql.createConnection({
     port: 20672,
     user: 'remote',
     password: 'remotepassword',
-    database: 'mco2_ddbms_under2010',
+    database: 'mco2_ddbms',
     ssl: { rejectUnauthorized: false }
 });
 
@@ -31,7 +31,7 @@ const node3 = mysql.createConnection({
     port: 20682,
     user: 'remote',
     password: 'remotepassword',
-    database: 'mco2_ddbms_after2010',
+    database: 'mco2_ddbms',
     ssl: { rejectUnauthorized: false }
 });
 
@@ -138,7 +138,7 @@ app.post('/get_game', async (req, res) => {
         // Check Node 2 first if healthy
         if (nodeHealth.node2) {
             try {
-                results = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                results = await queryAsync(node2, 'SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?', [AppID]);
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 2.');
                     return res.send({ source: 'Node 2', data: results[0] });
@@ -152,7 +152,7 @@ app.post('/get_game', async (req, res) => {
         // Check Node 3 if healthy
         if (nodeHealth.node3) {
             try {
-                results = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                results = await queryAsync(node3, 'SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?', [AppID]);
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 3.');
                     return res.send({ source: 'Node 3', data: results[0] });
@@ -165,10 +165,18 @@ app.post('/get_game', async (req, res) => {
 
         // Fallback to Central Node
         if (nodeHealth.node1) {
+
+            const allDataQuery = `
+                SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?
+                UNION
+                SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?
+                `;
+
             try {
-                results = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+                results = await queryAsync(db, allDataQuery, [AppID, AppID]);
+                
                 if (results.length > 0) {
-                    console.log('Data retrieved from Central Node.');
+                    console.log('Data retrieved from Master Node.');
                     return res.send({ source: 'Central Node', data: results[0] });
                 }
             } catch (err) {
@@ -189,7 +197,6 @@ app.post('/get_game', async (req, res) => {
 // Update game details
 app.post('/update_game', async (req, res) => {
     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score } = req.body;
-    console.log(AppID);
 
     try {
         const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
@@ -198,19 +205,41 @@ app.post('/update_game', async (req, res) => {
         const query = `
             UPDATE gameinfo
             SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
-            Positive_reviews = Positive_reviews + ?,
-            Negative_reviews = Negative_reviews + ?
+                Positive_reviews = Positive_reviews + ?,
+                Negative_reviews = Negative_reviews + ?
             WHERE AppID = ?
-    `;
+        `;
 
+        // Update in the master node
         await queryAsync(db, query, [
             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
         ]);
+
+        // Propagate the update to Node 2 (pre-2010)
+        try {
+            await queryAsync(node2, query, [
+                Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
+            ]);
+        } catch (err) {
+            console.error('Failed to propagate update to Node 2:', err.message);
+        }
+
+        // Propagate the update to Node 3 (post-2010)
+        try {
+            await queryAsync(node3, query, [
+                Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
+            ]);
+        } catch (err) {
+            console.error('Failed to propagate update to Node 3:', err.message);
+        }
+
         res.send('Game updated successfully.');
     } catch (err) {
         res.status(500).send({ error: err.message });
     }
 });
+
+
 // Insert a new game
 app.post('/add_game', async (req, res) => {
     const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
