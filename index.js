@@ -138,7 +138,10 @@ app.post('/get_game', async (req, res) => {
         // Check Node 2 first if healthy
         if (nodeHealth.node2) {
             try {
+                await queryAsync(node2, 'START TRANSACTION');
                 results = await queryAsync(node2, 'SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?', [AppID]);
+                await queryAsync(node2, 'COMMIT');
+
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 2.');
                     return res.send({ source: 'Node 2', data: results[0] });
@@ -152,7 +155,10 @@ app.post('/get_game', async (req, res) => {
         // Check Node 3 if healthy
         if (nodeHealth.node3) {
             try {
+                await queryAsync(node3, 'START TRANSACTION');
                 results = await queryAsync(node3, 'SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?', [AppID]);
+                await queryAsync(node3, 'COMMIT');
+
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 3.');
                     return res.send({ source: 'Node 3', data: results[0] });
@@ -173,8 +179,10 @@ app.post('/get_game', async (req, res) => {
                 `;
 
             try {
+                await queryAsync(db, 'START TRANSACTION');
                 results = await queryAsync(db, allDataQuery, [AppID, AppID]);
-                
+                await queryAsync(db, 'COMMIT');
+
                 if (results.length > 0) {
                     console.log('Data retrieved from Master Node.');
                     return res.send({ source: 'Central Node', data: results[0] });
@@ -195,45 +203,110 @@ app.post('/get_game', async (req, res) => {
 
 
 // Update game details
+// app.post('/update_game', async (req, res) => {
+//     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, targetTable } = req.body;
+
+//     const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
+//     const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
+
+//     const query = `
+//         UPDATE ${targetTable}
+//         SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
+//             Positive_reviews = Positive_reviews + ?,
+//             Negative_reviews = Negative_reviews + ?
+//         WHERE AppID = ?
+//     `;
+
+//     try {
+//         await queryAsync(db, query, [
+//             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
+//         ]);
+//         res.send('Game updated successfully.');
+//     } catch (err) {
+//         console.error('Error updating game:', err.message);
+//         res.status(500).send({ error: 'Failed to update game.' });
+//     }
+// });
+
 app.post('/update_game', async (req, res) => {
-    const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score } = req.body;
+    const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, Release_date } = req.body;
+
+    if (!Release_date) {
+        return res.status(400).send('Release date is required for the update.');
+    }
+    const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
+    const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
+    console.log('Received Release Date:', Release_date);
+
+    // Determine the correct table based on Release_date
+    const targetTable = new Date(Release_date) < new Date('2010-01-01')
+        ? 'mco2_ddbms_under2010'
+        : 'mco2_ddbms_after2010';
+
+    // Perform the update
+    const query = `
+        UPDATE ${targetTable}
+        SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
+            Positive_reviews = Positive_reviews + ?,
+            Negative_reviews = Negative_reviews + ?
+        WHERE AppID = ?
+    `;
 
     try {
-        const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
-        const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
-
-        const query = `
-            UPDATE gameinfo
-            SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
-                Positive_reviews = Positive_reviews + ?,
-                Negative_reviews = Negative_reviews + ?
-            WHERE AppID = ?
-        `;
-
-        // Update in the master node
         await queryAsync(db, query, [
-            Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
+            Reviews, Metacritic_url, Metacritic_score, positiveIncrement, negativeIncrement, AppID
         ]);
-
-        // Propagate the update to Node 2 (pre-2010)
-        try {
-            await queryAsync(node2, query, [
-                Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
-            ]);
-        } catch (err) {
-            console.error('Failed to propagate update to Node 2:', err.message);
-        }
-
-        // Propagate the update to Node 3 (post-2010)
-        try {
-            await queryAsync(node3, query, [
-                Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
-            ]);
-        } catch (err) {
-            console.error('Failed to propagate update to Node 3:', err.message);
-        }
-
         res.send('Game updated successfully.');
+    } catch (err) {
+        console.error('Error updating game:', err.message);
+        res.status(500).send('Failed to update the game.');
+    }
+});
+
+
+
+app.get('/concurrent_read', async (req, res) => {
+    const { AppID } = req.query; // Get AppID from the query parameter
+    if (!AppID) {
+        return res.status(400).send({ error: 'AppID is required' });
+    }
+
+    try {
+        const results = {};
+
+        // Read from Master Node
+        try {
+            const masterData = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
+            results.Master = masterData.length > 0 ? masterData : null; // Set to null if no data is found
+        } catch (err) {
+            results.Master = `Error: ${err.message}`;
+        }
+
+        // Read from Node 2
+        if (nodeHealth.node2) {
+            try {
+                const node2Data = await queryAsync(node2, 'SELECT * FROM mco2_ddbms.mco2_ddbms_under2010 WHERE AppID = ?', [AppID]);
+                results['Node 2'] = node2Data.length > 0 ? node2Data : null; // Set to null if no data is found
+            } catch (err) {
+                results['Node 2'] = `Error: ${err.message}`;
+            }
+        } else {
+            results['Node 2'] = 'Node is not available';
+        }
+
+        // Read from Node 3
+        if (nodeHealth.node3) {
+            try {
+                const node3Data = await queryAsync(node3, 'SELECT * FROM mco2_ddbms.mco2_ddbms_after2010 WHERE AppID = ?', [AppID]);
+                results['Node 3'] = node3Data.length > 0 ? node3Data : null; // Set to null if no data is found
+            } catch (err) {
+                results['Node 3'] = `Error: ${err.message}`;
+            }
+        } else {
+            results['Node 3'] = 'Node is not available';
+        }
+
+        res.json(results);
     } catch (err) {
         res.status(500).send({ error: err.message });
     }
