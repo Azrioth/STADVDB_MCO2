@@ -392,36 +392,40 @@ app.get('/fetch_game/:AppID', async (req, res) => {
 // Delete specific review data
 app.post('/delete_field', async (req, res) => {
     const { AppID, Field } = req.body;
-
+    const targetTable = new Date(Release_date) < new Date('2010-01-01')
+        ? 'mco2_ddbms_under2010'
+        : 'mco2_ddbms_after2010';
+    
     try {
         let query;
         let params;
-
         switch (Field) {
             case 'Reviews':
-                query = 'UPDATE steam_reviews SET Reviews = ? WHERE AppID = ?';
+                query = `UPDATE ${targetTable} SET Reviews = ? WHERE AppID = ?`;
                 params = ['No review', AppID];
                 break;
             case 'Metacritic_score':
-                query = 'UPDATE steam_reviews SET Metacritic_score = ? WHERE AppID = ?';
+                query = `UPDATE ${targetTable} SET Metacritic_score = ? WHERE AppID = ?`;
                 params = [0.0, AppID];
                 break;
             case 'Metacritic_url':
-                query = `
-                    UPDATE steam_reviews
-                    SET Metacritic_url = ?, Metacritic_score = ?
-                    WHERE AppID = ?
-                `;
+                query = `UPDATE ${targetTable} SET Metacritic_url = ?, Metacritic_score = ? WHERE AppID = ?`;
                 params = ['No metacritic URL', 0.0, AppID];
                 break;
             default:
                 return res.status(400).send('Invalid field selected.');
         }
+        await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+        await queryAsync(db, 'START TRANSACTION');
+        await queryAsync(db, query);
 
-        await queryAsync(db, query, params);
+        await queryAsync(db, 'COMMIT');
+
         res.send('Field updated successfully.');
     } catch (err) {
-        res.status(500).send({ error: err.message });
+        console.error('Error deleting field: ', err.message)
+        await queryAsync(db, 'ROLLBACK');
+        res.status(500).send('Failed to delete field');
     }
 });
 

@@ -56,7 +56,9 @@
             <th style="border: 1px solid #ddd; padding: 8px;">Game Name</th>
             <th style="border: 1px solid #ddd; padding: 8px;">Release Date</th>
             <th style="border: 1px solid #ddd; padding: 8px;">Price</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Metacritic URL</th>
             <th style="border: 1px solid #ddd; padding: 8px;">Metacritic Score</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Reviews</th>
             <th style="border: 1px solid #ddd; padding: 8px;">Positive Reviews</th>
             <th style="border: 1px solid #ddd; padding: 8px;">Negative Reviews</th>
         </tr>
@@ -305,7 +307,9 @@ document.getElementById('concurrent-read-form').addEventListener('submit', async
                         <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Game_Name}</td>
                         <td style="border: 1px solid #ddd; padding: 8px;">${new Date(result[0].Release_date).toISOString().split('T')[0]}</td>
                         <td style="border: 1px solid #ddd; padding: 8px;">$${result[0].Price}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Metacritic_score || 'N/A'}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Metacritic_url || 'No metacritic URL'}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Metacritic_score || 0}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Reviews || 'No review'}</td>
                         <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Positive_reviews || 0}</td>
                         <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Negative_reviews || 0}</td>
                     `
@@ -321,20 +325,33 @@ document.getElementById('concurrent-read-form').addEventListener('submit', async
     }
 });
 
-
-
-
         // Delete field
         document.getElementById('delete-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(document.getElementById('delete-form'));
             const jsonData = Object.fromEntries(formData.entries());
-            const res = await fetch('/delete_field', {
+            
+
+            const [year, month, day] = jsonData.Release_date.split('-');
+            const releaseDate = new Date(year, month-1, day);
+
+            const targetTable = releaseDate.getFullYear() < 2010
+                ? 'mco2_ddbms_under2010'
+                : 'mco2_ddbms_after2010';
+
+            jsonData.targetTable = targetTable
+            
+            try{
+                 const res = await fetch('/delete_field', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(jsonData)
             });
-            alert(await res.text());
+            } catch (error){
+                console.error('Error updating game:', error);
+                alert('Failed to update the game. Check the console for details.');
+            }
+           
         });
     </script>
 </body>
