@@ -260,6 +260,9 @@ app.post('/update_game', async (req, res) => {
         WHERE AppID = ?
     `;
 
+      // Declare originalData in a higher scope for rollback purposes
+      let originalData;
+
     try {
         // Begin transaction
         
@@ -268,15 +271,20 @@ app.post('/update_game', async (req, res) => {
             return res.status(500).send('Node 1 is offline. Transaction cancelled.');
         }
 
-
         await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
         await queryAsync(db, 'START TRANSACTION');
 
         // Step 1: Fetch the current state of the record
-        const [originalData] = await queryAsync(db, selectQuery, [AppID]);
+        [originalData] = await queryAsync(db, selectQuery, [AppID]);
 
         if (!originalData) {
             throw new Error('Record not found for the provided AppID.');
+        }
+
+        if(targetTable == 'mco2_ddbms_under2010'){
+            await queryAsync(node2, 'SELECT 1');
+        }else{
+            await queryAsync(node3, 'SELECT 1');
         }
 
         // Step 2: Perform the update
@@ -384,15 +392,21 @@ app.post('/add_game', async (req, res) => {
     const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
 
     try {
-        // Insert into the master node
-        
+        // Simulate a failure in the central node
+        const simulateCentralNodeFailure = Math.random() < 0.50; // 50% chance of failure
+
         const query = `
             INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
+
+        // Step 1: Attempt to insert into the master node (central node)
+        if (simulateCentralNodeFailure) {
+            throw new Error('System failure: Central node is unavailable.');
+        }
         await queryAsync(db, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
 
-        // Determine which node to replicate the data to
+        // Step 2: Determine which node to replicate the data to
         const releaseDate = new Date(Release_date);
         if (releaseDate < new Date('2010-01-01')) {
             // Insert into Node 2
@@ -402,10 +416,27 @@ app.post('/add_game', async (req, res) => {
             await queryAsync(node3, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
         }
 
-        res.send('Game added successfully and replicated to appropriate node.');
+        res.send('Game added successfully and replicated to the appropriate node.');
     } catch (err) {
-        res.status(500).send({ error: err.message });
-    }});
+        console.error('Error adding game:', err.message);
+
+        // Handle central node failure
+        if (err.message.includes('Central node is unavailable')) {
+            res.status(500).send({
+                message: 'Failed to add game. System Error.',
+                error: err.message,
+            });
+        } else {
+            res.status(500).send({
+                message: 'Failed to add game.',
+                error: err.message,
+            });
+        }
+    }
+});
+
+
+
 app.get('/fetch_game/:AppID', async (req, res) => {
     const { AppID } = req.params;
 
