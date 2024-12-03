@@ -281,8 +281,13 @@ app.get('/concurrent_read', async (req, res) => {
     }
 
     try {
+        const allDataQuery = `
+        SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?
+        UNION
+        SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?
+        `;
         // Define queries for each node as Promises
-        const masterQuery = queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID])
+        const masterQuery = queryAsync(db, allDataQuery, [AppID, AppID])
             .then((data) => ({ node: 'Master', data }))
             .catch((err) => ({ node: 'Master', error: err.message }));
 
