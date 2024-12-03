@@ -234,6 +234,7 @@ app.post('/update_game', async (req, res) => {
     if (!Release_date) {
         return res.status(400).send('Release date is required for the update.');
     }
+
     const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
     const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
     console.log('Received Release Date:', Release_date);
@@ -244,35 +245,88 @@ app.post('/update_game', async (req, res) => {
         : 'mco2_ddbms_after2010';
 
     // Perform the update
-    const query = `
+    const selectQuery = `SELECT * FROM ${targetTable} WHERE AppID = ?`;
+    const updateQuery = `
         UPDATE ${targetTable}
         SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
             Positive_reviews = Positive_reviews + ?,
             Negative_reviews = Negative_reviews + ?
         WHERE AppID = ?
     `;
+    const rollbackQuery = `
+        UPDATE ${targetTable}
+        SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
+            Positive_reviews = ?, Negative_reviews = ?
+        WHERE AppID = ?
+    `;
 
     try {
+        // Begin transaction
+        
+        const isDBOnline = await checkDatabaseConnection();
+        if (!isDBOnline) {
+            return res.status(500).send('Node 1 is offline. Transaction cancelled.');
+        }
+
 
         await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-
         await queryAsync(db, 'START TRANSACTION');
 
-        await queryAsync(db, query, [
-            Reviews, Metacritic_url, Metacritic_score, positiveIncrement, negativeIncrement, AppID
+        // Step 1: Fetch the current state of the record
+        const [originalData] = await queryAsync(db, selectQuery, [AppID]);
+
+        if (!originalData) {
+            throw new Error('Record not found for the provided AppID.');
+        }
+
+        // Step 2: Perform the update
+        await queryAsync(db, updateQuery, [
+            Reviews, Metacritic_url, Metacritic_score,
+            positiveIncrement, negativeIncrement, AppID
         ]);
 
+        // Step 3: Commit the transaction if everything succeeds
         await queryAsync(db, 'COMMIT');
-
         res.send('Game updated successfully.');
     } catch (err) {
         console.error('Error updating game:', err.message);
+
+        // Step 4: Rollback the transaction
         await queryAsync(db, 'ROLLBACK');
-        res.status(500).send('Failed to update the game.');
+
+        // Step 5: Recover the data using the original state
+        try {
+            if (originalData) {
+                await queryAsync(db, rollbackQuery, [
+                    originalData.Reviews,
+                    originalData.Metacritic_url,
+                    originalData.Metacritic_score,
+                    originalData.Positive_reviews,
+                    originalData.Negative_reviews,
+                    originalData.AppID
+                ]);
+                console.log('Rollback recovery executed successfully.');
+            }
+        } catch (rollbackErr) {
+            console.error('Rollback recovery failed:', rollbackErr.message);
+        }
+
+        res.status(500).send('Failed to update the game. Rollback executed.');
     }
 });
 
 
+
+async function checkDatabaseConnection() {
+    try {
+        // Run a simple query to check if the database is responsive
+        const result = await queryAsync(db, 'SELECT 1');
+        return result ? true : false;
+    } catch (err) {
+        console.error('Database connection check failed:', err.message);
+        return false;
+    }
+}
 
 app.get('/concurrent_read', async (req, res) => {
     const { AppID } = req.query; // Get AppID from the query parameter
