@@ -203,31 +203,6 @@ app.post('/get_game', async (req, res) => {
 
 
 // Update game details
-// app.post('/update_game', async (req, res) => {
-//     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, targetTable } = req.body;
-
-//     const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
-//     const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
-
-//     const query = `
-//         UPDATE ${targetTable}
-//         SET Reviews = ?, Metacritic_url = ?, Metacritic_score = ?,
-//             Positive_reviews = Positive_reviews + ?,
-//             Negative_reviews = Negative_reviews + ?
-//         WHERE AppID = ?
-//     `;
-
-//     try {
-//         await queryAsync(db, query, [
-//             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, -negativeIncrement, AppID
-//         ]);
-//         res.send('Game updated successfully.');
-//     } catch (err) {
-//         console.error('Error updating game:', err.message);
-//         res.status(500).send({ error: 'Failed to update game.' });
-//     }
-// });
-
 app.post('/update_game', async (req, res) => {
     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, Release_date } = req.body;
 
@@ -242,7 +217,11 @@ app.post('/update_game', async (req, res) => {
     const targetTable = new Date(Release_date) < new Date('2010-01-01')
         ? 'mco2_ddbms_under2010'
         : 'mco2_ddbms_after2010';
+    
+    await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
 
+
+    await queryAsync(db, 'START TRANSACTION');
     // Perform the update
     const query = `
         UPDATE ${targetTable}
