@@ -253,12 +253,21 @@ app.post('/update_game', async (req, res) => {
     `;
 
     try {
+
+        await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+
+        await queryAsync(db, 'START TRANSACTION');
+
         await queryAsync(db, query, [
             Reviews, Metacritic_url, Metacritic_score, positiveIncrement, negativeIncrement, AppID
         ]);
+
+        await queryAsync(db, 'COMMIT');
+
         res.send('Game updated successfully.');
     } catch (err) {
         console.error('Error updating game:', err.message);
+        await queryAsync(db, 'ROLLBACK');
         res.status(500).send('Failed to update the game.');
     }
 });
@@ -272,41 +281,39 @@ app.get('/concurrent_read', async (req, res) => {
     }
 
     try {
-        const results = {};
+        // Define queries for each node as Promises
+        const masterQuery = queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID])
+            .then((data) => ({ node: 'Master', data }))
+            .catch((err) => ({ node: 'Master', error: err.message }));
 
-        // Read from Master Node
-        try {
-            const masterData = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
-            results.Master = masterData.length > 0 ? masterData : null; // Set to null if no data is found
-        } catch (err) {
-            results.Master = `Error: ${err.message}`;
-        }
+        const node2Query = nodeHealth.node2
+            ? queryAsync(node2, 'SELECT * FROM mco2_ddbms.mco2_ddbms_under2010 WHERE AppID = ?', [AppID])
+                .then((data) => ({ node: 'Node 2', data }))
+                .catch((err) => ({ node: 'Node 2', error: err.message }))
+            : Promise.resolve({ node: 'Node 2', error: 'Node is not available' });
 
-        // Read from Node 2
-        if (nodeHealth.node2) {
-            try {
-                const node2Data = await queryAsync(node2, 'SELECT * FROM mco2_ddbms.mco2_ddbms_under2010 WHERE AppID = ?', [AppID]);
-                results['Node 2'] = node2Data.length > 0 ? node2Data : null; // Set to null if no data is found
-            } catch (err) {
-                results['Node 2'] = `Error: ${err.message}`;
+        const node3Query = nodeHealth.node3
+            ? queryAsync(node3, 'SELECT * FROM mco2_ddbms.mco2_ddbms_after2010 WHERE AppID = ?', [AppID])
+                .then((data) => ({ node: 'Node 3', data }))
+                .catch((err) => ({ node: 'Node 3', error: err.message }))
+            : Promise.resolve({ node: 'Node 3', error: 'Node is not available' });
+
+        // Run all queries concurrently
+        const results = await Promise.all([masterQuery, node2Query, node3Query]);
+
+        // Format the results into a response object
+        const response = {};
+        results.forEach((result) => {
+            if (result.error) {
+                response[result.node] = result.error;
+            } else if (result.data && result.data.length > 0) {
+                response[result.node] = result.data;
+            } else {
+                response[result.node] = 'No Data Found';
             }
-        } else {
-            results['Node 2'] = 'Node is not available';
-        }
+        });
 
-        // Read from Node 3
-        if (nodeHealth.node3) {
-            try {
-                const node3Data = await queryAsync(node3, 'SELECT * FROM mco2_ddbms.mco2_ddbms_after2010 WHERE AppID = ?', [AppID]);
-                results['Node 3'] = node3Data.length > 0 ? node3Data : null; // Set to null if no data is found
-            } catch (err) {
-                results['Node 3'] = `Error: ${err.message}`;
-            }
-        } else {
-            results['Node 3'] = 'Node is not available';
-        }
-
-        res.json(results);
+        res.json(response);
     } catch (err) {
         res.status(500).send({ error: err.message });
     }
@@ -319,6 +326,7 @@ app.post('/add_game', async (req, res) => {
 
     try {
         // Insert into the master node
+        
         const query = `
             INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
             VALUES (?, ?, ?, ?, ?, ?)
