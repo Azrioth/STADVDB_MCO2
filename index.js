@@ -429,6 +429,38 @@ app.post('/delete_field', async (req, res) => {
     }
 });
 
+app.get('/fetch_reviews_summary', async (req, res) => {
+    try {
+        // SQL Query to fetch aggregated data
+        const query = `
+            SELECT 
+                YEAR(Release_date) AS Year, 
+                SUM(Positive_reviews) AS Positive_reviews, 
+                SUM(Negative_reviews) AS Negative_reviews, 
+                CASE 
+                    WHEN SUM(Negative_reviews) = 0 THEN NULL
+                    ELSE ROUND(SUM(Positive_reviews) / (SUM(Positive_reviews)+SUM(Negative_reviews)), 2) 
+                END AS Customer_satisfaction
+            FROM (
+                SELECT Release_date, Positive_reviews, Negative_reviews FROM mco2_ddbms_after2010
+                UNION ALL
+                SELECT Release_date, Positive_reviews, Negative_reviews FROM mco2_ddbms_under2010
+            ) AS CombinedData
+            GROUP BY YEAR(Release_date)
+            ORDER BY Year;
+        `;
+
+        // Execute the query
+        const results = await queryAsync(db, query);
+
+        // Send results back to frontend
+        res.json(results);
+    } catch (err) {
+        console.error("Error fetching review summary:", err);
+        res.status(500).send({ error: 'Failed to fetch review summary' });
+    }
+});
+
 // Start the server
 const PORT = 3000;
 app.listen(PORT, () => {
