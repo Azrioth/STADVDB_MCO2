@@ -7,7 +7,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Connect to MySQL database
+//connect with databases
 const db = mysql.createConnection({
     host: 'ccscloud.dlsu.edu.ph',
     port: 20662,
@@ -52,39 +52,41 @@ const node3 = mysql.createConnection({
 // });
 
 
-
+// node 2 connecting 
 node2.connect((err) => {
     if (err) {
         console.error('Failed to connect to Node 2:', err.message);
-        nodeHealth.node2 = false; // Mark Node 2 as down
+        nodeHealth.node2 = false; 
     } else {
         console.log('Connected to Node 2.');
-        nodeHealth.node2 = true; // Mark Node 2 as healthy
+        nodeHealth.node2 = true; 
     }
 });
 
+// node 3 connecting 
 node3.connect((err) => {
     if (err) {
         console.error('Failed to connect to Node 3:', err.message);
-        nodeHealth.node3 = false; // Mark Node 3 as down
+        nodeHealth.node3 = false; 
     } else {
         console.log('Connected to Node 3.');
-        nodeHealth.node3 = true; // Mark Node 3 as healthy
+        nodeHealth.node3 = true; 
     }
 });
 
+// central/master node connecting 
 db.connect((err) => {
     if (err) {
         console.error('Failed to connect to Central Node:', err.message);
-        nodeHealth.node1 = false; // Mark Central Node as down
+        nodeHealth.node1 = false; 
     } else {
         console.log('Connected to the central database.');
-        nodeHealth.node1 = true; // Mark Central Node as healthy
+        nodeHealth.node1 = true; 
     }
 });
 
 
-// Utility function to run queries using promises
+// helper function for queries using promises
 const queryAsync = (connection, sql, params) => {
     return new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -94,19 +96,20 @@ const queryAsync = (connection, sql, params) => {
     });
 };
 
-
+// node health, is changed if not connected
 const nodeHealth = {
-    node1: true, // Represents the central database
-    node2: true, // Represents the node for pre-2010 games
-    node3: true  // Represents the node for post-2010 games
+    node1: true, 
+    node2: true, 
+    node3: true 
 };
 
+//function to check a node's health (if theyre connected)
 const checkNodeHealth = async (connection, node) => {
     console.log("----------------------");
     try {
-        await queryAsync(connection, 'SELECT 1'); // Simple query to check connectivity
+        await queryAsync(connection, 'SELECT 1'); //SELECT 1 just to see if it will respond, if responds then is connected
         nodeHealth[node] = true;
-        console.log(`${node} is healthy.`);
+        console.log(`${node} is healthy.`); 
     } catch (err) {
         nodeHealth[node] = false;
         console.log(`${node} is not healthy: ${err.message}`);
@@ -114,7 +117,7 @@ const checkNodeHealth = async (connection, node) => {
     
 };
 
-// Periodic health checks every minute
+//health check every 10 seconds
 setInterval(() => {
     checkNodeHealth(db, 'node1');
     checkNodeHealth(node2, 'node2');
@@ -123,55 +126,61 @@ setInterval(() => {
 
 
 
-
+//renders the index html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '/public/index.html'));
 });
 
-// Fetch game details by AppID
+//fetch all game details in database by AppID
 app.post('/get_game', async (req, res) => {
     const { AppID } = req.body;
 
     try {
         let results;
 
-        // Check Node 2 first if healthy
+        // if node 2 is healthy
         if (nodeHealth.node2) {
             try {
+                //considering repeatable read, we need a "commit" line. 
                 await queryAsync(node2, 'START TRANSACTION');
                 results = await queryAsync(node2, 'SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?', [AppID]);
                 await queryAsync(node2, 'COMMIT');
 
+                //show the data that was received
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 2.');
                     return res.send({ source: 'Node 2', data: results[0] });
                 }
+
             } catch (err) {
                 console.error('Node 2 is down:', err.message);
-                nodeHealth.node2 = false; // Mark Node 2 as down
+                nodeHealth.node2 = false; //make nodehealth of 2 as unhealthy
             }
         }
 
-        // Check Node 3 if healthy
+        //if node 3 is healthy
         if (nodeHealth.node3) {
             try {
+                //considering repeatable read, we need a "commit" line. 
                 await queryAsync(node3, 'START TRANSACTION');
                 results = await queryAsync(node3, 'SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?', [AppID]);
                 await queryAsync(node3, 'COMMIT');
 
+                //show the data that was received
                 if (results.length > 0) {
                     console.log('Data retrieved from Node 3.');
                     return res.send({ source: 'Node 3', data: results[0] });
                 }
             } catch (err) {
                 console.error('Node 3 is down:', err.message);
-                nodeHealth.node3 = false; // Mark Node 3 as down
+                nodeHealth.node3 = false; //make nodehealth of 2 as unhealthy
             }
         }
 
-        // Fallback to Central Node
+        //fallback to central node
         if (nodeHealth.node1) {
 
+            //considering two tables, a union select to get all elements 
             const allDataQuery = `
                 SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?
                 UNION
@@ -179,6 +188,7 @@ app.post('/get_game', async (req, res) => {
                 `;
 
             try {
+                //considering repeatable read, we need a "commit" line. 
                 await queryAsync(db, 'START TRANSACTION');
                 results = await queryAsync(db, allDataQuery, [AppID, AppID]);
                 await queryAsync(db, 'COMMIT');
@@ -202,7 +212,7 @@ app.post('/get_game', async (req, res) => {
 
 
 
-// Update game details
+// update game details
 // app.post('/update_game', async (req, res) => {
 //     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, targetTable } = req.body;
 
@@ -228,23 +238,24 @@ app.post('/get_game', async (req, res) => {
 //     }
 // });
 
+//update game details
 app.post('/update_game', async (req, res) => {
     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, Release_date } = req.body;
 
     if (!Release_date) {
         return res.status(400).send('Release date is required for the update.');
     }
-
+    // for adding later
     const positiveIncrement = ReviewType === 'Positive' ? 1 : 0;
     const negativeIncrement = ReviewType === 'Negative' ? 1 : 0;
     console.log('Received Release Date:', Release_date);
 
-    // Determine the correct table based on Release_date
+    //determine the correct table based on Release_date
     const targetTable = new Date(Release_date) < new Date('2010-01-01')
         ? 'mco2_ddbms_under2010'
         : 'mco2_ddbms_after2010';
 
-    // Perform the update
+    //update query
     const selectQuery = `SELECT * FROM ${targetTable} WHERE AppID = ?`;
     const updateQuery = `
         UPDATE ${targetTable}
@@ -261,48 +272,51 @@ app.post('/update_game', async (req, res) => {
     `;
 
       // Declare originalData in a higher scope for rollback purposes
-      let originalData;
+    let originalData;
 
     try {
         // Begin transaction
-        
+        //checks if master is online
         const isDBOnline = await checkDatabaseConnection();
         if (!isDBOnline) {
             return res.status(500).send('Node 1 is offline. Transaction cancelled.');
         }
 
+        //making the transaction serializable so updates like positive reviews will go sequentially.
         await queryAsync(db, 'SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
         await queryAsync(db, 'START TRANSACTION');
 
-        // Step 1: Fetch the current state of the record
+        //get first the original data (data in the centralnode)
         [originalData] = await queryAsync(db, selectQuery, [AppID]);
 
+        //if cannot be found, then no record
         if (!originalData) {
             throw new Error('Record not found for the provided AppID.');
         }
 
+        //checks for them if they are there
         if(targetTable == 'mco2_ddbms_under2010'){
             await queryAsync(node2, 'SELECT 1');
         }else{
             await queryAsync(node3, 'SELECT 1');
         }
 
-        // Step 2: Perform the update
+        //update goes into master node
         await queryAsync(db, updateQuery, [
             Reviews, Metacritic_url, Metacritic_score,
             positiveIncrement, negativeIncrement, AppID
         ]);
 
-        // Step 3: Commit the transaction if everything succeeds
+        //commit query
         await queryAsync(db, 'COMMIT');
         res.send('Game updated successfully.');
     } catch (err) {
         console.error('Error updating game:', err.message);
 
-        // Step 4: Rollback the transaction
+        //should there be an error, rollback
         await queryAsync(db, 'ROLLBACK');
 
-        // Step 5: Recover the data using the original state
+        //recover data
         try {
             if (originalData) {
                 await queryAsync(db, rollbackQuery, [
@@ -324,10 +338,10 @@ app.post('/update_game', async (req, res) => {
 });
 
 
-
+// checks data base connection
 async function checkDatabaseConnection() {
     try {
-        // Run a simple query to check if the database is responsive
+        // query if responsive
         const result = await queryAsync(db, 'SELECT 1');
         return result ? true : false;
     } catch (err) {
@@ -337,18 +351,19 @@ async function checkDatabaseConnection() {
 }
 
 app.get('/concurrent_read', async (req, res) => {
-    const { AppID } = req.query; // Get AppID from the query parameter
+    const { AppID } = req.query; //gets app id from the query (that being input field)
     if (!AppID) {
         return res.status(400).send({ error: 'AppID is required' });
     }
 
     try {
+        //unionized query
         const allDataQuery = `
         SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?
         UNION
         SELECT * FROM mco2_ddbms_after2010 WHERE AppID = ?
         `;
-        // Define queries for each node as Promises
+        //queries are in a promise
         const masterQuery = queryAsync(db, allDataQuery, [AppID, AppID])
             .then((data) => ({ node: 'Master', data }))
             .catch((err) => ({ node: 'Master', error: err.message }));
@@ -365,10 +380,10 @@ app.get('/concurrent_read', async (req, res) => {
                 .catch((err) => ({ node: 'Node 3', error: err.message }))
             : Promise.resolve({ node: 'Node 3', error: 'Node is not available' });
 
-        // Run all queries concurrently
+        //since theyre all promises, once run, they will concurrently happen
         const results = await Promise.all([masterQuery, node2Query, node3Query]);
 
-        // Format the results into a response object
+        //format the results into a response object
         const response = {};
         results.forEach((result) => {
             if (result.error) {
@@ -387,26 +402,27 @@ app.get('/concurrent_read', async (req, res) => {
 });
 
 
-// Insert a new game
+//insert a new game
 app.post('/add_game', async (req, res) => {
     const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
 
     try {
-        // Simulate a failure in the central node
+        //simulate a failure in the central node
         const simulateCentralNodeFailure = Math.random() < 0.50; // 50% chance of failure
 
+        //query for inserting
         const query = `
             INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
 
-        // Step 1: Attempt to insert into the master node (central node)
+        //only master node allows insertions
         if (simulateCentralNodeFailure) {
             throw new Error('System failure: Central node is unavailable.');
         }
         await queryAsync(db, query, [AppID, Game_Name, Release_date, Price, Required_age, Achievements]);
 
-        // Step 2: Determine which node to replicate the data to
+        //to whom the data will replicate into
         const releaseDate = new Date(Release_date);
         if (releaseDate < new Date('2010-01-01')) {
             // Insert into Node 2
@@ -420,7 +436,7 @@ app.post('/add_game', async (req, res) => {
     } catch (err) {
         console.error('Error adding game:', err.message);
 
-        // Handle central node failure
+        //handle master failure
         if (err.message.includes('Central node is unavailable')) {
             res.status(500).send({
                 message: 'Failed to add game. System Error.',
@@ -441,11 +457,10 @@ app.get('/fetch_game/:AppID', async (req, res) => {
     const { AppID } = req.params;
 
     try {
-        // Check which node to query
+        //check which node to query
         let nodeToQuery = null;
 
         if (nodeHealth.node2) {
-            // Pre-2010 logic
             const pre2010Result = await queryAsync(node2, 'SELECT * FROM gameinfo WHERE AppID = ? AND Release_date < "2010-01-01"', [AppID]);
             if (pre2010Result.length > 0) {
                 nodeToQuery = 'Node 2';
@@ -454,7 +469,6 @@ app.get('/fetch_game/:AppID', async (req, res) => {
         }
 
         if (nodeHealth.node3) {
-            // Post-2010 logic
             const post2010Result = await queryAsync(node3, 'SELECT * FROM gameinfo WHERE AppID = ? AND Release_date >= "2010-01-01"', [AppID]);
             if (post2010Result.length > 0) {
                 nodeToQuery = 'Node 3';
@@ -462,7 +476,7 @@ app.get('/fetch_game/:AppID', async (req, res) => {
             }
         }
 
-        // Fallback to master node if slaves are down
+        //fallback to master if slaves are down in getting game info
         const masterResult = await queryAsync(db, 'SELECT * FROM gameinfo WHERE AppID = ?', [AppID]);
         if (masterResult.length > 0) {
             nodeToQuery = 'Master Node';
@@ -474,14 +488,17 @@ app.get('/fetch_game/:AppID', async (req, res) => {
         res.status(500).send({ error: err.message });
     }
 });
-// Delete specific review data
+
+//delete a specific field, not data
 app.post('/delete_field', async (req, res) => {
-    const { AppID, Field } = req.body;
+    const { AppID, Field } = req.body; //get app id in input
+
     const targetTable = new Date(Release_date) < new Date('2010-01-01')
         ? 'mco2_ddbms_under2010'
         : 'mco2_ddbms_after2010';
     
     try {
+        //query + params since deleting is just updating without data.
         let query;
         let params;
         switch (Field) {
@@ -514,9 +531,9 @@ app.post('/delete_field', async (req, res) => {
     }
 });
 
+//report for review summary
 app.get('/fetch_reviews_summary', async (req, res) => {
     try {
-        // SQL Query to fetch aggregated data
         const query = `
             SELECT 
                 YEAR(Release_date) AS Year, 
@@ -535,10 +552,9 @@ app.get('/fetch_reviews_summary', async (req, res) => {
             ORDER BY Year;
         `;
 
-        // Execute the query
         const results = await queryAsync(db, query);
 
-        // Send results back to frontend
+        //results will show in html
         res.json(results);
     } catch (err) {
         console.error("Error fetching review summary:", err);
@@ -546,7 +562,7 @@ app.get('/fetch_reviews_summary', async (req, res) => {
     }
 });
 
-// Start the server
+//server start
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
