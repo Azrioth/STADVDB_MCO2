@@ -122,6 +122,12 @@ setInterval(() => {
 }, 10000);
 
 
+let operationLock = false; // Indicates whether an operation is in progress
+
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
 
 app.get('/', (req, res) => {
@@ -130,6 +136,15 @@ app.get('/', (req, res) => {
 
 // Fetch game details by AppID
 app.post('/get_game', async (req, res) => {
+
+    if (operationLock) {
+        return res.status(429).send({ error: 'Another operation is currently in progress. Please try again later.' });
+    }
+
+    operationLock = true; // Acquire lock
+
+    await sleep(5000);
+
     const { AppID } = req.body;
 
     try {
@@ -197,6 +212,8 @@ app.post('/get_game', async (req, res) => {
         res.status(404).send({ error: 'Game not found.' });
     } catch (err) {
         res.status(500).send({ error: 'Internal server error: ' + err.message });
+    } finally {
+        operationLock = false; // Release lock
     }
 });
 
@@ -229,6 +246,16 @@ app.post('/get_game', async (req, res) => {
 // });
 
 app.post('/update_game', async (req, res) => {
+    
+    if (operationLock) {
+        return res.status(429).send({ error: 'Another operation is currently in progress. Please try again later.' });
+    }
+
+    operationLock = true; // Acquire lock
+    
+    await sleep(5000);
+
+
     const { AppID, Reviews, ReviewType, Metacritic_url, Metacritic_score, Release_date } = req.body;
 
     if (!Release_date) {
@@ -320,7 +347,9 @@ app.post('/update_game', async (req, res) => {
         }
 
         res.status(500).send('Failed to update the game. Rollback executed.');
-    }
+    } finally {
+        operationLock = false; // Release lock
+    } 
 });
 
 
@@ -337,12 +366,24 @@ async function checkDatabaseConnection() {
 }
 
 app.get('/concurrent_read', async (req, res) => {
-    const { AppID } = req.query; // Get AppID from the query parameter
-    if (!AppID) {
-        return res.status(400).send({ error: 'AppID is required' });
+    
+    if (operationLock) {
+        return res.status(429).send({ error: 'Another operation is currently in progress. Please try again later.' });
     }
 
+    operationLock = true; // Acquire lock
+    
+
+    await sleep(5000);
+
     try {
+
+        const { AppID } = req.query; // Get AppID from the query parameter
+        if (!AppID) {
+            return res.status(400).send({ error: 'AppID is required' });
+        }
+
+
         const allDataQuery = `
         SELECT * FROM mco2_ddbms_under2010 WHERE AppID = ?
         UNION
@@ -383,17 +424,29 @@ app.get('/concurrent_read', async (req, res) => {
         res.json(response);
     } catch (err) {
         res.status(500).send({ error: err.message });
+    } finally {
+        operationLock = false; // Release lock
     }
 });
 
 
 // Insert a new game
 app.post('/add_game', async (req, res) => {
-    const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
+
+    if (operationLock) {
+        return res.status(429).send({ error: 'Another operation is currently in progress. Please try again later.' });
+    }
+
+    operationLock = true; // Acquire lock
+
+    await sleep(5000);
 
     try {
+
+        const { AppID, Game_Name, Release_date, Price, Required_age, Achievements } = req.body;
+
         // Simulate a failure in the central node
-        const simulateCentralNodeFailure = Math.random() < 0.50; // 50% chance of failure
+        const simulateCentralNodeFailure = Math.random() < 0.85; // 50% chance of failure
 
         const query = `
             INSERT INTO gameinfo (AppID, Game_Name, Release_date, Price, Required_age, Achievements)
@@ -421,7 +474,7 @@ app.post('/add_game', async (req, res) => {
         console.error('Error adding game:', err.message);
 
         // Handle central node failure
-        if (err.message.includes('Central node is unavailable')) {
+        if (err.message.includes('Node is unavailable')) {
             res.status(500).send({
                 message: 'Failed to add game. System Error.',
                 error: err.message,
@@ -432,6 +485,8 @@ app.post('/add_game', async (req, res) => {
                 error: err.message,
             });
         }
+    } finally {
+        operationLock = false; // Release lock
     }
 });
 
