@@ -4,46 +4,149 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Steam Games Reviews</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        .game-details {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .game-details h2 {
+            margin-top: 0;
+        }
+
+        .game-details p {
+            margin: 5px 0;
+        }
+
+        .game-details span {
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <h1>Steam Games Reviews</h1>
-
+    <h2>Concurrent Read Test</h2>
+<form id="concurrent-read-form">
+    <label for="concurrent-AppID">Enter Game ID:</label>
+    <input type="text" id="concurrent-AppID" name="AppID" required>
+    <button type="submit">Run Concurrent Read Test</button>
+</form>
+<!-- Table to Display Results -->
+<table id="concurrent-read-table" style="border-collapse: collapse; width: 100%; margin-top: 20px;">
+    <thead>
+        <tr>
+            <th style="border: 1px solid #ddd; padding: 8px;">Node</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">AppID</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Game Name</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Release Date</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Price</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Metacritic URL</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Metacritic Score</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Reviews</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Positive Reviews</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Negative Reviews</th>
+        </tr>
+    </thead>
+    <tbody id="concurrent-read-body">
+        <!-- Results will be appended here dynamically -->
+    </tbody>
+    
+</table>
+<hr>
+    
     <!-- Game Lookup Section -->
     <form id="game-form">
+        <h2>View All Game Details</h2>
         <label for="AppID">Enter Game ID:</label>
         <input type="text" id="AppID" name="AppID" required>
         <button type="submit">Fetch Game</button>
     </form>
-    <div id="game-details"></div>
-
+    <div id="game-details" class="game-details" style="display: none;">
+        <h2>Game Details</h2>
+        <p><span>Game ID:</span> <span id="game-id"></span></p>
+        <p><span>Name:</span> <span id="game-name"></span></p>
+        <p><span>Release Date:</span> <span id="release-date"></span></p>
+        <p><span>Price:</span> <span id="price"></span></p>
+        <p><span>Required Age:</span> <span id="required-age"></span></p>
+        <p><span>Achievements:</span> <span id="achievements"></span></p>
+        <p><span>Reviews:</span> <span id="reviews"></span></p>
+        <p><span>Positive Reviews:</span> <span id="positive-reviews"></span></p>
+        <p><span>Negative Reviews:</span> <span id="negative-reviews"></span></p>
+        <p><span>Metacritic Score:</span> <span id="metacritic-score"></span></p>
+        <p><span>Metacritic URL:</span> <a id="metacritic-url" href="#" target="_blank">Link</a></p>
+        <br>
+    </div>
+    <hr>
     <!-- Game Update Section -->
-    <h2>Update Review</h2>
     <form id="update-form">
         <input type="hidden" id="update-AppID" name="AppID">
-
+    
         <label for="Reviews">Review:</label>
         <input type="text" id="Reviews" name="Reviews">
-
         <div>
-            <label>
-                <input type="radio" name="ReviewType" value="Positive">
-                Positive
-            </label>
-            <label>
-                <input type="radio" name="ReviewType" value="Negative">
-                Negative
-            </label>
+            <br>
+            <label for="review-type-field">Review Type:</label>
+            <select id="review-type-field" name="ReviewType">
+                <option value=""></option>
+                <option value="Positive">Positive</option>
+                <option value="Negative">Negative</option>
+            </select>
         </div>
-
+        <br>
         <label for="Metacritic_url">Metacritic URL:</label>
         <input type="text" id="Metacritic_url" name="Metacritic_url">
-
+    
         <label for="Metacritic_score">Metacritic Score:</label>
         <input type="number" id="Metacritic_score" name="Metacritic_score">
-
+    
+        <!-- Add Release Date Field -->
+        <label for="update-Release_date">Release Date:</label>
+        <input type="date" id="update-Release_date" name="Release_date" required>
+    
         <button type="submit">Update Game</button>
     </form>
+    
 
+    
+    <!-- Insert -->
+    <h2>Add New Game</h2>
+    <form id="add-game-form">
+        <label for="add-AppID">Game ID:</label>
+        <input type="text" id="add-AppID" name="AppID" required><br>
+    
+        <label for="add-Game_Name">Name:</label>
+        <input type="text" id="add-Game_Name" name="Game_Name" required><br>
+    
+        <label for="add-Release_date">Release Date:</label>
+        <input type="date" id="add-Release_date" name="Release_date" required><br>
+    
+        <label for="add-Price">Price:</label>
+        <input type="number" step="0.01" id="add-Price" name="Price" required><br>
+    
+        <label for="add-Required_age">Required Age:</label>
+        <input type="number" id="add-Required_age" name="Required_age"><br>
+    
+        <label for="add-Achievements">Achievements:</label>
+        <input type="text" id="add-Achievements" name="Achievements"><br>
+    
+        <button type="submit">Add Game</button>
+    </form>
     <!-- Delete Field Section -->
     <h2>Delete Review</h2>
     <form id="delete-form">
@@ -58,7 +161,23 @@
         
         <button type="submit" id="delete-button">Delete Field</button>
     </form>
-
+    <br><br>
+    <h2> Text Based Report: Customer Satisfaction Throughout the Years</h2>
+    <table id="text-based-report-head" style="border-collapse: collapse; width: 100%; margin-top: 20px;">
+        <thead>
+            <tr>
+                <th style="border: 1px solid #ddd; padding: 8px;">Year</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Positive Reviews</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Negative Reviews</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Customer Satisfaction</th>
+            </tr>
+        </theadd>
+        
+        <tbody id="text-based-report-body">
+            <!-- Results will be appended here dynamically -->
+        </tbody>
+        
+    </table>
 
     <script>
         // Fetch game details
@@ -71,43 +190,237 @@
                 body: JSON.stringify({ AppID: appID })
             });
             const data = await res.json();
+
             if (data.error) {
                 alert(data.error);
+                document.getElementById('game-details').style.display = 'none';
                 return;
             }
-            document.getElementById('game-details').innerText = JSON.stringify(data, null, 2);
-            document.getElementById('update-AppID').value = appID;
-            document.getElementById('delete-AppID').value = appID;
-            document.getElementById('Reviews').value = data.Reviews || '';
-            document.getElementById('Metacritic_url').value = data.Metacritic_url || '';
-            document.getElementById('Metacritic_score').value = data.Metacritic_score || '';
+
+            // Populate game details
+            document.getElementById('game-id').textContent = data.data.AppID || 'N/A';
+            document.getElementById('game-name').textContent = data.data.Game_Name || 'N/A';
+            document.getElementById('release-date').textContent = data.data.Release_date
+                ? new Date(data.data.Release_date).toISOString().split('T')[0]
+                : 'N/A';
+            document.getElementById('price').textContent = `$${data.data.Price || 0}`;
+            document.getElementById('required-age').textContent = data.data.Required_age || 'N/A';
+            document.getElementById('achievements').textContent = data.data.Achievements || 'N/A';
+            document.getElementById('reviews').textContent = data.data.Reviews || 'No reviews';
+            document.getElementById('positive-reviews').textContent = data.data.Positive_reviews || 0;
+            document.getElementById('negative-reviews').textContent = data.data.Negative_reviews || 0;
+            document.getElementById('metacritic-score').textContent = data.data.Metacritic_score || 'N/A';
+            document.getElementById('metacritic-url').href = data.data.Metacritic_url || '#';
+            document.getElementById('metacritic-url').textContent = data.data.Metacritic_url ? 'View Metacritic' : 'No URL';
+
+            // Populate update form
+            document.getElementById('update-AppID').value = data.data.AppID || '';
+            document.getElementById('Reviews').value = data.data.Reviews || '';
+            document.getElementById('review-type-field').value = '';
+            document.getElementById('Metacritic_url').value = data.data.Metacritic_url || '';
+            document.getElementById('Metacritic_score').value = data.data.Metacritic_score || '';
+            document.getElementById('update-Release_date').value = data.data.Release_date
+                ? new Date(data.data.Release_date).toISOString().split('T')[0]
+                : '';
+            // Show the game details section
+            document.getElementById('game-details').style.display = 'block';
         });
-    
+
         // Update game details
-        document.getElementById('update-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(document.getElementById('update-form'));
-            const jsonData = Object.fromEntries(formData.entries());
-            const res = await fetch('/update_game', {
+       // Update game details
+document.getElementById('update-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Gather form data
+    const formData = new FormData(document.getElementById('update-form'));
+    const jsonData = Object.fromEntries(formData.entries());
+
+    // Check if the Release_date is valid
+    if (!jsonData.Release_date) {
+        alert('Release date is required to determine the target table.');
+        return;
+    }
+
+    // Parse the Release_date into a proper JavaScript Date object
+    const [year, month, day] = jsonData.Release_date.split('-');
+    const releaseDate = new Date(year, month - 1, day); // Month is 0-indexed
+
+    // Determine the target table based on the release date
+    const targetTable = releaseDate.getFullYear() < 2010
+        ? 'mco2_ddbms_under2010'
+        : 'mco2_ddbms_after2010';
+
+    // Add the targetTable to the payload
+    jsonData.targetTable = targetTable;
+
+    try {
+        // Make the POST request to the backend
+        const res = await fetch('/update_game', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonData)
+        });
+
+        // Handle the response
+        const message = await res.text();
+        alert(message);
+    } catch (error) {
+        console.error('Error updating game:', error);
+        alert('Failed to update the game. Check the console for details.');
+    }
+});
+
+
+
+
+        // Add new game
+        document.getElementById('add-game-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(document.getElementById('add-game-form'));
+        const jsonData = Object.fromEntries(formData.entries());
+
+            const res = await fetch('/add_game', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(jsonData)
+                body: JSON.stringify(jsonData),
             });
-            alert(await res.text());
+
+            const message = await res.text();
+            alert(message);
+
+    // Optional: Clear the form fields after adding
+            document.getElementById('add-game-form').reset();
         });
-    
+
+
+document.getElementById('concurrent-read-form').addEventListener('submit', async (e) => {
+    e.preventDefault(); // Prevent form reload
+
+    // Get the AppID from the input field
+    const AppID = document.getElementById('concurrent-AppID').value;
+
+    try {
+        // Fetch data from the backend
+        const res = await fetch(`/concurrent_read?AppID=${AppID}`);
+        const data = await res.json();
+
+        // Get the table body element
+        const tableBody = document.getElementById('concurrent-read-body');
+
+        // Clear existing rows
+        tableBody.innerHTML = '';
+
+        // Populate the table with data for each node
+        Object.keys(data).forEach((node) => {
+            const result = data[node];
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="border: 1px solid #ddd; padding: 8px;">${node}</td>
+                ${Array.isArray(result) && result.length > 0
+                    ? `
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].AppID}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Game_Name}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${new Date(result[0].Release_date).toISOString().split('T')[0]}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">$${result[0].Price}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Metacritic_url || 'No metacritic URL'}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Metacritic_score || 0}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Reviews || 'No review'}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Positive_reviews || 0}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${result[0].Negative_reviews || 0}</td>
+                    `
+                    : `
+                        <td colspan="8" style="border: 1px solid #ddd; padding: 8px; text-align: center;">${result || 'No Data Found'}</td>
+                    `}
+            `;
+            tableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error fetching concurrent read data:', error);
+        alert('Failed to fetch data. Check the console for more details.');
+    }
+});
+
         // Delete field
         document.getElementById('delete-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(document.getElementById('delete-form'));
             const jsonData = Object.fromEntries(formData.entries());
-            const res = await fetch('/delete_field', {
+            
+
+            const [year, month, day] = jsonData.Release_date.split('-');
+            const releaseDate = new Date(year, month-1, day);
+
+            const targetTable = releaseDate.getFullYear() < 2010
+                ? 'mco2_ddbms_under2010'
+                : 'mco2_ddbms_after2010';
+
+            jsonData.targetTable = targetTable
+            
+            try{
+                 const res = await fetch('/delete_field', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(jsonData)
             });
-            alert(await res.text());
+            } catch (error){
+                console.error('Error updating game:', error);
+                alert('Failed to update the game. Check the console for details.');
+            }
+           
         });
-    </script>    
+        async function fetchReviewSummary() {
+        try {
+            const response = await fetch('/fetch_reviews_summary');
+            const data = await response.json();
+
+            // Get the table body element
+            const tableBody = document.getElementById('text-based-report-body');
+
+            // Clear any existing rows in the table
+            tableBody.innerHTML = '';
+
+            // Populate the table with the data from the backend
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                // Create table cells for each data field
+                const yearCell = document.createElement('td');
+                yearCell.textContent = row.Year;
+                yearCell.style.border = '1px solid #ddd';
+                yearCell.style.padding = '8px';
+                tr.appendChild(yearCell);
+
+                const positiveReviewsCell = document.createElement('td');
+                positiveReviewsCell.textContent = row.Positive_reviews;
+                positiveReviewsCell.style.border = '1px solid #ddd';
+                positiveReviewsCell.style.padding = '8px';
+                tr.appendChild(positiveReviewsCell);
+
+                const negativeReviewsCell = document.createElement('td');
+                negativeReviewsCell.textContent = row.Negative_reviews;
+                negativeReviewsCell.style.border = '1px solid #ddd';
+                negativeReviewsCell.style.padding = '8px';
+                tr.appendChild(negativeReviewsCell);
+
+                const customerSatisfactionCell = document.createElement('td');
+                customerSatisfactionCell.textContent = row.Customer_satisfaction !== null ? row.Customer_satisfaction : 'N/A';
+                customerSatisfactionCell.style.border = '1px solid #ddd';
+                customerSatisfactionCell.style.padding = '8px';
+                tr.appendChild(customerSatisfactionCell);
+
+                // Append the row to the table body
+                tableBody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error('Error fetching review summary:', error);
+        }
+    }
+
+    // Fetch the data when the page loads
+    window.onload = fetchReviewSummary;
+
+    </script>
 </body>
 </html>
